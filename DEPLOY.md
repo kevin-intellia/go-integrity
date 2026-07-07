@@ -15,13 +15,16 @@ Do **not** commit `.env` — it is gitignored.
 1. Log in at [dash.cloudflare.com](https://dash.cloudflare.com)
 2. **Workers & Pages → Create → Pages → Connect to Git**
 3. Select this repository
-4. Build settings:
+4. Choose **Pages** (not Worker). If you see `npx wrangler deploy` in the logs, the project type is wrong.
+
+5. Build settings:
 
 | Setting | Value |
 |--------|--------|
 | **Framework preset** | None |
-| **Build command** | `npm install && npm run build:cloudflare` |
+| **Build command** | `npm run build:cloudflare` |
 | **Build output directory** | `build` |
+| **Deploy command** | leave empty / default (do **not** use `npx wrangler deploy`) |
 | **Node.js version** | `20` (Environment variables → Production) |
 
 ## 3. Add build environment variables
