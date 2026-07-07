@@ -6,6 +6,6 @@
 	<p class="mb-3 text-sm font-medium text-base-content">Active campaigns</p>
 	<p class="text-sm text-base-content-muted">
 		Paid Facebook ads (geo-targeted regional audiences), email (Seven Days newsletter and Stowe launch),
-		print (luxury launch), and social (manual posting on social channels).
+		print (Seven Days and Stowe reporter), and social (manual posting on social channels).
 	</p>
 </div>
