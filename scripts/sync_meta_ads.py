@@ -165,166 +165,6 @@ def normalize_row(row: dict) -> dict:
     }
 
 
-def seed_demo_data() -> None:
-    """Load sample rows so the dashboard works before Meta credentials are set."""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(DB_PATH))
-    con.execute("DROP TABLE IF EXISTS daily_campaign_insights")
-    con.execute("DROP TABLE IF EXISTS daily_adset_insights")
-    con.execute(f"CREATE TABLE daily_campaign_insights ({INSIGHTS_DDL})")
-    con.execute(f"CREATE TABLE daily_adset_insights ({INSIGHTS_DDL})")
-    con.executemany(
-        INSIGHTS_INSERT.format(table="daily_campaign_insights"),
-        [
-            (
-                date(2026, 6, 1),
-                date(2026, 6, 1),
-                "1001",
-                "Brand Awareness",
-                None,
-                None,
-                None,
-                None,
-                12000,
-                240,
-                180,
-                85.50,
-                9800,
-                0.36,
-                7.13,
-                2.0,
-                8,
-                2,
-                0,
-                0,
-                10,
-            ),
-            (
-                date(2026, 6, 2),
-                date(2026, 6, 2),
-                "1001",
-                "Brand Awareness",
-                None,
-                None,
-                None,
-                None,
-                13500,
-                260,
-                195,
-                92.25,
-                10200,
-                0.35,
-                6.83,
-                1.93,
-                9,
-                1,
-                0,
-                0,
-                10,
-            ),
-            (
-                date(2026, 6, 3),
-                date(2026, 6, 3),
-                "1002",
-                "Lead Gen - Form",
-                None,
-                None,
-                None,
-                None,
-                8900,
-                310,
-                220,
-                145.00,
-                7200,
-                0.47,
-                16.29,
-                3.48,
-                22,
-                4,
-                0,
-                0,
-                26,
-            ),
-        ],
-    )
-    con.executemany(
-        INSIGHTS_INSERT.format(table="daily_adset_insights"),
-        [
-            (
-                date(2026, 6, 1),
-                date(2026, 6, 1),
-                "1001",
-                "Brand Awareness",
-                "2001",
-                "Broad - US",
-                None,
-                None,
-                7000,
-                140,
-                105,
-                48.00,
-                5600,
-                0.34,
-                6.86,
-                2.0,
-                5,
-                1,
-                0,
-                0,
-                6,
-            ),
-            (
-                date(2026, 6, 1),
-                date(2026, 6, 1),
-                "1001",
-                "Brand Awareness",
-                "2002",
-                "Retarget - US",
-                None,
-                None,
-                5000,
-                100,
-                75,
-                37.50,
-                4200,
-                0.38,
-                7.50,
-                2.0,
-                3,
-                1,
-                0,
-                0,
-                4,
-            ),
-            (
-                date(2026, 6, 2),
-                date(2026, 6, 2),
-                "1002",
-                "Lead Gen - Form",
-                "2003",
-                "Lookalike 1%",
-                None,
-                None,
-                9100,
-                295,
-                210,
-                138.75,
-                7400,
-                0.47,
-                15.25,
-                3.24,
-                19,
-                3,
-                0,
-                0,
-                22,
-            ),
-        ],
-    )
-    con.close()
-    print(f"Wrote demo data to {DB_PATH}")
-
-
 def write_insights_table(table: str, rows: list[dict]) -> int:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     normalized = [normalize_row(row) for row in rows]
@@ -367,14 +207,21 @@ def write_insights_table(table: str, rows: list[dict]) -> int:
     return len(normalized)
 
 
+def keep_or_fail(reason: str) -> int:
+    if DB_PATH.exists():
+        print(f"{reason} — keeping existing Meta data.", file=sys.stderr)
+        return 0
+    print(f"{reason} — no cached Meta data available.", file=sys.stderr)
+    return 1
+
+
 def main() -> int:
     token, account_id = load_config()
 
     if not token or token == "your_access_token_here":
-        print("No META_ACCESS_TOKEN found — loading demo data.")
-        print("Copy .env.example to .env and add your Meta credentials when ready.")
-        seed_demo_data()
-        return 0
+        print("No META_ACCESS_TOKEN found.", file=sys.stderr)
+        print("Copy .env.example to .env and add your Meta credentials when ready.", file=sys.stderr)
+        return keep_or_fail("Missing Meta token")
 
     if not account_id:
         print("Missing META_AD_ACCOUNT_ID in .env", file=sys.stderr)
@@ -389,12 +236,7 @@ def main() -> int:
         return 0
     except requests.RequestException as error:
         print(f"Meta sync failed: {error}", file=sys.stderr)
-        if DB_PATH.exists():
-            print("Keeping existing Meta data.", file=sys.stderr)
-            return 0
-        print("Loading demo Meta data instead.", file=sys.stderr)
-        seed_demo_data()
-        return 0
+        return keep_or_fail("Meta sync failed")
 
 
 if __name__ == "__main__":
