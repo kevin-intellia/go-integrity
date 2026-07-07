@@ -22,7 +22,7 @@
 		},
 		{
 			key: 'appointments_scheduled',
-			title: 'Appointments Requested',
+			title: 'Showings requested',
 			summary: 'Leads who requested an appointment.'
 		},
 		{

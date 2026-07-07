@@ -7,7 +7,7 @@ description: Overall lead activity and Facebook ad performance for the last 30 d
 
 ## Overall Lead Activity
 
-All leads and outcomes across every channel — Facebook ads, email, print, and other sources.
+All leads and outcomes across every channel.
 
 ```sql crm_totals
 select * from ghl.client_crm_totals
@@ -42,8 +42,7 @@ select
         select count(*)
         from ghl.client_appointments
         where channel = 'Facebook Ad'
-    ) as appointments_booked,
-    (select min(date_start) from meta_ads.daily_campaign_insights) as ads_started_on
+    ) as appointments_booked
 from meta_ads.funnel_totals m
 cross join ghl.client_crm_totals c
 ```
@@ -65,7 +64,7 @@ order by lead_date
     yFmt='#,##0'
 />
 
-## Appointments
+## Showings
 
 Leads who requested a showing or booked a private viewing.
 

@@ -27,17 +27,16 @@
 		{
 			key: 'learn_more_forms',
 			title: 'Lead Forms',
-			summary: 'Facebook ad leads in the CRM.'
+			summary: 'Form submissions for property information'
 		},
 		{
 			key: 'appointments_booked',
-			title: 'Appointments',
-			summary: 'Requested via Facebook ads.'
+			title: 'Showings requested',
+			summary: 'Requested a private showing'
 		}
 	];
 
 	const valueFormat = getFormatObjectFromString('#,##0', 'number');
-	const dateFormat = getFormatObjectFromString('mmm d, yyyy', 'date');
 
 	let loaded = undefined;
 	let unsub = () => {};
@@ -67,10 +66,7 @@
 	<div class="mb-8 h-44 animate-pulse rounded-lg bg-base-200"></div>
 {:else if loaded?.length}
 	{@const row = rowFrom(loaded)}
-	<p class="mb-4 text-sm text-base-content-muted">
-		Paid ad funnel{#if row.ads_started_on}
-			· Ads started {formatValue(row.ads_started_on, dateFormat)}{/if}.
-	</p>
+	<p class="mb-4 text-sm text-base-content-muted">Paid ad funnel.</p>
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-8">
 		{#each metrics as metric}
 			<div
