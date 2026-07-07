@@ -1,0 +1,6 @@
+header img[alt='Home'],
+aside img[alt='Home'] {
+	height: 2.75rem;
+	width: auto;
+	max-width: min(100%, 14rem);
+}

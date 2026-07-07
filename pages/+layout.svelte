@@ -12,6 +12,6 @@
 	}
 </script>
 
-<EvidenceDefaultLayout {data} neverShowQueries={true}>
+<EvidenceDefaultLayout {data} neverShowQueries={true} logo="/integrity-logo.jpg" builtWithEvidence={false}>
 	<slot slot="content" />
 </EvidenceDefaultLayout>
