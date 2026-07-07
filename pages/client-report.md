@@ -15,7 +15,7 @@ All leads and outcomes across every channel.
 select * from ghl.client_crm_totals
 ```
 
-<CrmMetricBlocks data={crm_totals} />
+<CrmMetricBlocks data={crm_totals} showShowingsBooked={false} />
 
 ## Lead Sources
 
