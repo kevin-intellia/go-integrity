@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "sources" / "ghl" / "ghl.duckdb"
+SNAPSHOT_PATH = ROOT / "sources" / "ghl" / "ghl.snapshot.duckdb"
 BASE_URL = "https://services.leadconnectorhq.com"
 API_VERSION = "2021-07-28"
 PAGE_SIZE = 100
@@ -233,6 +235,25 @@ def write_table(table: str, ddl: str, rows: list[dict], columns: list[str]) -> i
     return len(rows)
 
 
+def save_snapshot() -> None:
+    if DB_PATH.exists():
+        shutil.copy2(DB_PATH, SNAPSHOT_PATH)
+        print(f"Updated GHL snapshot at {SNAPSHOT_PATH}")
+
+
+def keep_or_fail(reason: str) -> int:
+    if DB_PATH.exists():
+        print(f"{reason} — keeping existing GHL data.", file=sys.stderr)
+        return 0
+    if SNAPSHOT_PATH.exists():
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SNAPSHOT_PATH, DB_PATH)
+        print(f"{reason} — restored GHL data from snapshot.", file=sys.stderr)
+        return 0
+    print(f"{reason} — no cached GHL data available.", file=sys.stderr)
+    return 1
+
+
 def main() -> int:
     token, location_id = load_config()
 
@@ -245,8 +266,12 @@ def main() -> int:
         return 1
 
     print(f"Fetching GHL data for location {location_id}...")
-    contacts = fetch_contacts(token, location_id)
-    opportunities = fetch_opportunities(token, location_id)
+    try:
+        contacts = fetch_contacts(token, location_id)
+        opportunities = fetch_opportunities(token, location_id)
+    except requests.RequestException as error:
+        print(f"GHL sync failed: {error}", file=sys.stderr)
+        return keep_or_fail("GHL sync failed")
 
     contact_columns = [
         "id",
@@ -296,6 +321,7 @@ def main() -> int:
 
     write_table("contacts", CONTACTS_DDL, contacts, contact_columns)
     write_table("opportunities", OPPORTUNITIES_DDL, opportunities, opportunity_columns)
+    save_snapshot()
     return 0
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -15,6 +16,7 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "sources" / "meta_ads" / "meta_ads.duckdb"
+SNAPSHOT_PATH = ROOT / "sources" / "meta_ads" / "meta_ads.snapshot.duckdb"
 GRAPH_API_VERSION = "v22.0"
 
 # Conversion 1: submitted a form to learn more
@@ -207,9 +209,20 @@ def write_insights_table(table: str, rows: list[dict]) -> int:
     return len(normalized)
 
 
+def save_snapshot() -> None:
+    if DB_PATH.exists():
+        shutil.copy2(DB_PATH, SNAPSHOT_PATH)
+        print(f"Updated Meta snapshot at {SNAPSHOT_PATH}")
+
+
 def keep_or_fail(reason: str) -> int:
     if DB_PATH.exists():
         print(f"{reason} — keeping existing Meta data.", file=sys.stderr)
+        return 0
+    if SNAPSHOT_PATH.exists():
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SNAPSHOT_PATH, DB_PATH)
+        print(f"{reason} — restored Meta data from snapshot.", file=sys.stderr)
         return 0
     print(f"{reason} — no cached Meta data available.", file=sys.stderr)
     return 1
@@ -233,6 +246,7 @@ def main() -> int:
         adset_rows = fetch_insights(token, account_id, level="adset", days=30)
         write_insights_table("daily_campaign_insights", campaign_rows)
         write_insights_table("daily_adset_insights", adset_rows)
+        save_snapshot()
         return 0
     except requests.RequestException as error:
         print(f"Meta sync failed: {error}", file=sys.stderr)
