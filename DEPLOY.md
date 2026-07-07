@@ -29,16 +29,20 @@ Do **not** commit `.env` — it is gitignored.
 
 ## 3. Add build environment variables
 
-In **Pages → your project → Settings → Environment variables** (Production):
+In **Pages → your project → Settings → Build → Variables and secrets** (choose **Build** at the top):
 
 | Variable | Purpose |
 |----------|---------|
 | `META_ACCESS_TOKEN` | Meta Marketing API token |
-| `META_AD_ACCOUNT_ID` | e.g. `act_913909870396927` |
+| `META_AD_ACCOUNT_ID` | e.g. `act_1369099874606476` |
 | `GHL_PRIVATE_INTEGRATION_TOKEN` | GHL private integration token |
 | `GHL_LOCATION_ID` | GHL location ID |
 
 These are used during the build to pull fresh data.
+
+**Important:** Add each one with **Encrypt** turned on (Secret). Encrypted secrets are reliably available during the build; Plaintext ones often are not.
+
+After saving, open **Deployments → Details → Retry deployment**. A new build should show your variables being used (not `Build environment variables: (none found)`).
 
 ## 4. Optional: public Refresh button
 

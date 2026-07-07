@@ -105,6 +105,12 @@ def fetch_insights(
     rows: list[dict] = []
     while url:
         response = requests.get(url, params=params, timeout=120)
+        if not response.ok:
+            try:
+                error_body = response.json()
+            except ValueError:
+                error_body = response.text
+            print(f"Meta API error ({response.status_code}): {error_body}", file=sys.stderr)
         response.raise_for_status()
         payload = response.json()
 
