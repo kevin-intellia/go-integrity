@@ -15,28 +15,42 @@
 
 	const metrics = [
 		{
-			key: 'impressions',
-			title: 'Impressions',
-			summary: 'Times the ads appeared on screen.'
+			key: 'spend',
+			title: 'Total Spend',
+			summary: 'Ad spend across all campaigns in the last 30 days.',
+			format: '$#,##0'
 		},
 		{
-			key: 'landing_page_clicks',
-			title: 'Page Visits',
-			summary: 'Link clicks to the landing page from the ads.'
+			key: 'meta_leads',
+			title: 'Meta Leads',
+			summary: 'Lead form submissions tracked by Meta pixel.',
+			format: '#,##0'
 		},
 		{
-			key: 'learn_more_forms',
-			title: 'Lead Forms',
-			summary: 'Form submissions for property information'
+			key: 'cpl_meta',
+			title: 'CPL — Meta',
+			summary: 'Cost per lead based on Meta-reported conversions.',
+			format: '$#,##0'
 		},
 		{
-			key: 'appointments_booked',
-			title: 'Showings requested',
-			summary: 'Requested a private showing'
+			key: 'cpc',
+			title: 'CPC',
+			summary: 'Average cost per link click to the landing page.',
+			format: '$#,##0.00'
+		},
+		{
+			key: 'ctr',
+			title: 'CTR',
+			summary: 'Click-through rate: link clicks divided by impressions.',
+			format: '0.0"%"'
+		},
+		{
+			key: 'cost_per_showing',
+			title: 'Cost per Showing',
+			summary: 'Spend divided by Meta-reported showing requests.',
+			format: '$#,##0'
 		}
 	];
-
-	const valueFormat = getFormatObjectFromString('#,##0', 'number');
 
 	let loaded = undefined;
 	let unsub = () => {};
@@ -55,8 +69,12 @@
 
 	function rowFrom(rows) {
 		const list = Query.isQuery(rows) ? Array.from(rows) : rows;
-		checkInputs(list, ['impressions']);
+		checkInputs(list, ['spend']);
 		return list[0];
+	}
+
+	function formatFor(format) {
+		return getFormatObjectFromString(format, 'number');
 	}
 </script>
 
@@ -66,14 +84,13 @@
 	<div class="mb-8 h-44 animate-pulse rounded-lg bg-base-200"></div>
 {:else if loaded?.length}
 	{@const row = rowFrom(loaded)}
-	<p class="mb-4 text-sm text-base-content-muted">Paid ad funnel.</p>
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-8">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-8">
 		{#each metrics as metric}
 			<div
 				class="flex min-h-[9rem] flex-col gap-2 rounded-lg border border-base-content/20 bg-base-100 p-5"
 			>
 				<p class="text-3xl font-semibold tabular-nums leading-none">
-					{formatValue(row[metric.key] ?? 0, valueFormat)}
+					{formatValue(row[metric.key], formatFor(metric.format))}
 				</p>
 				<p class="text-base font-medium leading-snug">{metric.title}</p>
 				<p class="text-sm leading-snug text-base-content-muted">{metric.summary}</p>

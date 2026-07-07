@@ -19,7 +19,7 @@ select date_start as report_date from meta_ads.daily_campaign_insights
     dates=report_date
     title="Date range"
     presetRanges={['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'All Time']}
-    defaultValue="Last 30 Days"
+    defaultValue="All Time"
 />
 
 ## Overall Lead Activity
@@ -86,8 +86,8 @@ order by leads desc
 ```sql funnel_totals
 with meta as (
     select
-        sum(impressions) as impressions,
-        sum(link_clicks) as landing_page_clicks
+        coalesce(sum(impressions), 0) as impressions,
+        coalesce(sum(link_clicks), 0) as landing_page_clicks
     from meta_ads.daily_campaign_insights
     where date_start >= '${inputs.date_range.start}'
       and date_start <= '${inputs.date_range.end}'
