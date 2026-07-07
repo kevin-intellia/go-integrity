@@ -3,8 +3,6 @@ title: Campaign Performance
 description: Overall lead activity and Facebook ad performance for the last 30 days.
 ---
 
-<RefreshDataButton />
-
 <CampaignSummary />
 
 ## Overall Lead Activity
