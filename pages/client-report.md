@@ -64,3 +64,21 @@ order by lead_date
     sort=false
     yFmt='#,##0'
 />
+
+## Appointments
+
+Leads who requested a showing or booked a private viewing.
+
+```sql appointments
+select
+    name,
+    channel,
+    audience
+from ghl.client_appointments
+```
+
+<DataTable data={appointments} search=true>
+    <Column id="name" title="Name" />
+    <Column id="channel" title="Lead source" />
+    <Column id="audience" title="Ad audience" />
+</DataTable>
