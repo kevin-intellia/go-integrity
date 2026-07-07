@@ -375,11 +375,20 @@ def main() -> int:
         return 1
 
     print(f"Fetching insights for {account_id}...")
-    campaign_rows = fetch_insights(token, account_id, level="campaign", days=30)
-    adset_rows = fetch_insights(token, account_id, level="adset", days=30)
-    write_insights_table("daily_campaign_insights", campaign_rows)
-    write_insights_table("daily_adset_insights", adset_rows)
-    return 0
+    try:
+        campaign_rows = fetch_insights(token, account_id, level="campaign", days=30)
+        adset_rows = fetch_insights(token, account_id, level="adset", days=30)
+        write_insights_table("daily_campaign_insights", campaign_rows)
+        write_insights_table("daily_adset_insights", adset_rows)
+        return 0
+    except requests.RequestException as error:
+        print(f"Meta sync failed: {error}", file=sys.stderr)
+        if DB_PATH.exists():
+            print("Keeping existing Meta data.", file=sys.stderr)
+            return 0
+        print("Loading demo Meta data instead.", file=sys.stderr)
+        seed_demo_data()
+        return 0
 
 
 if __name__ == "__main__":
