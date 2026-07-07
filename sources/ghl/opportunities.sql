@@ -2,6 +2,7 @@ select
     id,
     name,
     contact_id,
+    pipeline_stage_id,
     status,
     source,
     monetary_value,
