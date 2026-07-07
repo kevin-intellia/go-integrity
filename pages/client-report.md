@@ -76,15 +76,7 @@ order by leads desc
 
 ## All Leads Over Time
 
-<ButtonGroup
-    name=lead_channel
-    data={lead_channels}
-    value=channel
-    defaultValue="All"
-    display=tabs
->
-    <ButtonGroupItem value="All" />
-</ButtonGroup>
+Cumulative lead growth by channel — each line tracks one source; All is total leads across every channel.
 
 ```sql all_leads_cumulative
 with classified as (
@@ -107,13 +99,22 @@ with classified as (
     where cast(date_added as date) >= '${inputs.date_range.start}'
       and cast(date_added as date) <= '${inputs.date_range.end}'
 ),
+channels as (
+    select distinct channel from classified
+),
 daily as (
+    select
+        lead_date,
+        channel,
+        count(*) as daily_leads
+    from classified
+    group by 1, 2
+),
+daily_total as (
     select
         lead_date,
         count(*) as daily_leads
     from classified
-    where '${inputs.lead_channel}' = 'All'
-       or channel = '${inputs.lead_channel}'
     group by 1
 ),
 date_span as (
@@ -125,32 +126,60 @@ date_span as (
         )
     )::date as lead_date
 ),
-filled as (
+channel_dates as (
     select
         d.lead_date,
-        coalesce(daily.daily_leads, 0) as daily_leads
+        c.channel
     from date_span d
-    left join daily on d.lead_date = daily.lead_date
+    cross join channels c
+),
+filled as (
+    select
+        cd.lead_date,
+        cd.channel,
+        coalesce(daily.daily_leads, 0) as daily_leads
+    from channel_dates cd
+    left join daily
+        on cd.lead_date = daily.lead_date
+        and cd.channel = daily.channel
+),
+all_filled as (
+    select
+        d.lead_date,
+        coalesce(daily_total.daily_leads, 0) as daily_leads
+    from date_span d
+    left join daily_total on d.lead_date = daily_total.lead_date
+),
+per_channel as (
+    select
+        lead_date,
+        channel,
+        strftime(lead_date, '%b %d') as lead_date_label,
+        sum(daily_leads) over (
+            partition by channel
+            order by lead_date
+            rows between unbounded preceding and current row
+        ) as cumulative_leads
+    from filled
+),
+all_series as (
+    select
+        lead_date,
+        'All' as channel,
+        strftime(lead_date, '%b %d') as lead_date_label,
+        sum(daily_leads) over (
+            order by lead_date
+            rows between unbounded preceding and current row
+        ) as cumulative_leads
+    from all_filled
 )
-select
-    lead_date,
-    strftime(lead_date, '%b %d') as lead_date_label,
-    sum(daily_leads) over (
-        order by lead_date
-        rows between unbounded preceding and current row
-    ) as cumulative_leads
-from filled
-order by lead_date
+select * from per_channel
+union all
+select * from all_series
+order by channel, lead_date
 ```
 
-<LineChart
-    data={all_leads_cumulative}
-    title="Cumulative leads"
-    x=lead_date_label
-    y=cumulative_leads
-    sort=false
-    yFmt='#,##0'
-/>
+<CumulativeLeadsByChannelChart data={all_leads_cumulative} />
 
 ## Facebook Ads in Detail
 
