@@ -77,15 +77,15 @@ order by leads desc
 
 ## All Leads Over Time
 
-<Dropdown
+<ButtonGroup
     name=lead_channel
     data={lead_channels}
     value=channel
-    title="Channel"
     defaultValue="All"
+    display=tabs
 >
-    <DropdownOption value="All" />
-</Dropdown>
+    <ButtonGroupItem value="All" />
+</ButtonGroup>
 
 ```sql all_leads_cumulative
 with classified as (
@@ -113,8 +113,8 @@ daily as (
         lead_date,
         count(*) as daily_leads
     from classified
-    where '${inputs.lead_channel.value}' = 'All'
-       or channel = '${inputs.lead_channel.value}'
+    where '${inputs.lead_channel}' = 'All'
+       or channel = '${inputs.lead_channel}'
     group by 1
 ),
 date_span as (
