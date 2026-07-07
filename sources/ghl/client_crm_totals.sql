@@ -1,7 +1,12 @@
 select
-    count(*) as total_leads,
-    sum(
-        case when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 1 else 0 end
+    (
+        select count(*)
+        from contacts
+    ) as total_leads,
+    (
+        select count(*)
+        from contacts
+        where utm_source = 'facebook' and utm_medium = 'cpc'
     ) as facebook_ad_leads,
     sum(
         case when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c' then 1 else 0 end

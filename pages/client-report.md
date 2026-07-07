@@ -30,12 +30,11 @@ All leads and outcomes across every channel.
 select
     count(*) as total_leads,
     sum(
-        case when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 1 else 0 end
+        case when utm_source = 'facebook' and utm_medium = 'cpc' then 1 else 0 end
     ) as facebook_ad_leads
-from ghl.opportunities o
-join ghl.contacts c on c.id = o.contact_id
-where cast(c.date_added as date) >= '${inputs.date_range.start}'
-  and cast(c.date_added as date) <= '${inputs.date_range.end}'
+from ghl.contacts
+where cast(date_added as date) >= '${inputs.date_range.start}'
+  and cast(date_added as date) <= '${inputs.date_range.end}'
 ```
 
 <CrmMetricBlocks data={crm_totals} showShowingsBooked={false} />
@@ -153,7 +152,9 @@ order by lead_date
     yFmt='#,##0'
 />
 
-## Facebook Ad Funnel
+## Facebook Ads in Detail
+
+Facebook is the largest lead source in this campaign. This section breaks out paid Meta ad performance — impressions, page visits, and lead forms — separately from email, print, and other channels above.
 
 ```sql funnel_totals
 with meta as (
@@ -167,12 +168,11 @@ with meta as (
 crm as (
     select
         sum(
-            case when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 1 else 0 end
+            case when utm_source = 'facebook' and utm_medium = 'cpc' then 1 else 0 end
         ) as facebook_ad_leads
-    from ghl.opportunities o
-    join ghl.contacts c on c.id = o.contact_id
-    where cast(c.date_added as date) >= '${inputs.date_range.start}'
-      and cast(c.date_added as date) <= '${inputs.date_range.end}'
+    from ghl.contacts
+    where cast(date_added as date) >= '${inputs.date_range.start}'
+      and cast(date_added as date) <= '${inputs.date_range.end}'
 )
 select
     m.impressions,

@@ -13,6 +13,7 @@
 
 	export let data = undefined;
 	export let showShowingsRequested = true;
+	export let description = undefined;
 
 	const allMetrics = [
 		{
@@ -71,7 +72,9 @@
 	<div class="mb-8 h-44 animate-pulse rounded-lg bg-base-200"></div>
 {:else if loaded?.length}
 	{@const row = rowFrom(loaded)}
-	<p class="mb-4 text-sm text-base-content-muted">Paid ad funnel.</p>
+	{#if description}
+		<p class="mb-4 text-sm text-base-content-muted">{description}</p>
+	{/if}
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-8">
 		{#each metrics as metric}
 			<div

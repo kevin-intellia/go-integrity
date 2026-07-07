@@ -138,4 +138,4 @@ select
 from meta_ads.funnel_totals m
 ```
 
-<FunnelMetricBlocks data={funnel_totals} />
+<FunnelMetricBlocks data={funnel_totals} description="Paid Meta ad funnel — impressions through CRM lead forms." />
