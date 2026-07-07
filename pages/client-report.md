@@ -1,6 +1,8 @@
 ---
 title: Campaign Performance
 description: Overall lead activity and Facebook ad performance for the last 30 days.
+sidebar: never
+hide_breadcrumbs: true
 ---
 
 <CampaignSummary />
