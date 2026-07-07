@@ -1,23 +1,8 @@
 ---
-title: Meta Ads Dashboard
+title: Campaign Performance
+sidebar_link: false
 ---
 
-# Meta Ads Dashboard
+<meta http-equiv="refresh" content="0;url=/client-report/" />
 
-Evidence + DuckDB reporting for Facebook/Instagram ads.
-
-<Grid columns=1>
-  <BigLink url="/client-report">Client Report (leads & performance)</BigLink>
-</Grid>
-
-## Refresh data
-
-```bash
-npm run refresh
-npm run dev
-```
-
-## What's connected
-
-- **Meta Ads** → Python sync script → DuckDB → Evidence charts
-- **GHL** → contacts & opportunities → DuckDB → client report
+<p><a href="/client-report/">Campaign Performance</a></p>
