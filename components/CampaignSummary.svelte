@@ -3,9 +3,7 @@
 </script>
 
 <div class="mb-8 rounded-lg border border-base-content/20 bg-base-100 p-5">
-	<p class="mb-3 text-sm font-medium text-base-content">Active campaigns</p>
 	<p class="text-sm text-base-content-muted">
-		Paid Facebook ads (geo-targeted regional audiences), email (Seven Days newsletter and Stowe launch),
-		print (Seven Days and Stowe reporter), and social (manual posting on social channels).
+		Marketing performance at a glance. Use the date range filter to explore different periods.
 	</p>
 </div>

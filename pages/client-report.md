@@ -8,7 +8,7 @@ hide_breadcrumbs: true
 <CampaignSummary />
 
 ```sql report_dates
-select cast(date_added as date) as report_date from ghl.contacts
+select lead_date as report_date from ghl._lead_records
 union all
 select date_start as report_date from meta_ads.daily_campaign_insights
 ```
@@ -29,12 +29,10 @@ All leads and outcomes across every channel.
 ```sql crm_totals
 select
     count(*) as total_leads,
-    sum(
-        case when utm_source = 'facebook' and utm_medium = 'cpc' then 1 else 0 end
-    ) as facebook_ad_leads
-from ghl.contacts
-where cast(date_added as date) >= '${inputs.date_range.start}'
-  and cast(date_added as date) <= '${inputs.date_range.end}'
+    sum(case when channel = 'Facebook Ads' then 1 else 0 end) as facebook_ad_leads
+from ghl._lead_records
+where lead_date >= '${inputs.date_range.start}'
+  and lead_date <= '${inputs.date_range.end}'
 ```
 
 <CrmMetricBlocks data={crm_totals} showShowingsBooked={false} />
@@ -45,23 +43,11 @@ All campaigns and channels driving leads into the CRM.
 
 ```sql lead_channels
 select
-    case
-        when utm_source = 'facebook' and utm_medium = 'cpc' then 'Facebook Ads'
-        when utm_medium = 'email' or utm_source ilike '%email%' then 'Email'
-        when utm_medium = 'print' then 'Print'
-        when utm_source is null or trim(utm_source) = '' then
-            case
-                when session_source = 'Direct traffic' then 'No Campaign Tag'
-                when session_source = 'Social media' then 'Social'
-                when session_source = 'Organic Search' then 'Organic Search'
-                else 'Untracked (no UTM)'
-            end
-        else coalesce(utm_source, 'Other')
-    end as channel,
+    channel,
     count(*) as leads
-from ghl.contacts
-where cast(date_added as date) >= '${inputs.date_range.start}'
-  and cast(date_added as date) <= '${inputs.date_range.end}'
+from ghl._lead_records
+where lead_date >= '${inputs.date_range.start}'
+  and lead_date <= '${inputs.date_range.end}'
 group by 1
 order by leads desc
 ```
@@ -80,24 +66,10 @@ Cumulative lead growth by channel — each line tracks one source; All is total 
 
 ```sql all_leads_cumulative
 with classified as (
-    select
-        cast(date_added as date) as lead_date,
-        case
-            when utm_source = 'facebook' and utm_medium = 'cpc' then 'Facebook Ads'
-            when utm_medium = 'email' or utm_source ilike '%email%' then 'Email'
-            when utm_medium = 'print' then 'Print'
-            when utm_source is null or trim(utm_source) = '' then
-                case
-                    when session_source = 'Direct traffic' then 'No Campaign Tag'
-                    when session_source = 'Social media' then 'Social'
-                    when session_source = 'Organic Search' then 'Organic Search'
-                    else 'Untracked (no UTM)'
-                end
-            else coalesce(utm_source, 'Other')
-        end as channel
-    from ghl.contacts
-    where cast(date_added as date) >= '${inputs.date_range.start}'
-      and cast(date_added as date) <= '${inputs.date_range.end}'
+    select lead_date, channel
+    from ghl._lead_records
+    where lead_date >= '${inputs.date_range.start}'
+      and lead_date <= '${inputs.date_range.end}'
 ),
 channels as (
     select distinct channel from classified
@@ -196,12 +168,10 @@ with meta as (
 ),
 crm as (
     select
-        sum(
-            case when utm_source = 'facebook' and utm_medium = 'cpc' then 1 else 0 end
-        ) as facebook_ad_leads
-    from ghl.contacts
-    where cast(date_added as date) >= '${inputs.date_range.start}'
-      and cast(date_added as date) <= '${inputs.date_range.end}'
+        sum(case when channel = 'Facebook Ads' then 1 else 0 end) as facebook_ad_leads
+    from ghl._lead_records
+    where lead_date >= '${inputs.date_range.start}'
+      and lead_date <= '${inputs.date_range.end}'
 )
 select
     m.impressions,
@@ -216,12 +186,12 @@ cross join crm c
 ```sql lead_cumulative
 with daily as (
     select
-        cast(date_added as date) as lead_date,
+        lead_date,
         count(*) as daily_leads
-    from ghl.contacts
-    where utm_source = 'facebook' and utm_medium = 'cpc'
-      and cast(date_added as date) >= '${inputs.date_range.start}'
-      and cast(date_added as date) <= '${inputs.date_range.end}'
+    from ghl._lead_records
+    where channel = 'Facebook Ads'
+      and lead_date >= '${inputs.date_range.start}'
+      and lead_date <= '${inputs.date_range.end}'
     group by 1
 ),
 date_span as (

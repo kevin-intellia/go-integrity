@@ -235,6 +235,49 @@ def write_table(table: str, ddl: str, rows: list[dict], columns: list[str]) -> i
     return len(rows)
 
 
+LEAD_RECORDS_VIEW = """
+create or replace view lead_records as
+select
+    o.id as opportunity_id,
+    o.contact_id,
+    cast(coalesce(c.date_added, o.created_at) as date) as lead_date,
+    o.source as opportunity_source,
+    c.source as contact_source,
+    c.utm_source,
+    c.utm_medium,
+    c.session_source,
+    case
+        when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 'Facebook Ads'
+        when c.utm_medium = 'email' or c.utm_source ilike '%email%' then 'Email'
+        when c.utm_medium = 'print' then 'Print'
+        when o.source in ('Integrity Website Inquires', 'Integrity Website Inquiries') then 'Integrity Website'
+        when o.source = 'Listing Realtor Referral Leads' then 'Realtor Referral'
+        when o.source in ('Realtors', 'Realors') then 'Realtors'
+        when o.source = 'FB Community/Marketplace Ad' then 'Facebook Marketplace'
+        when c.utm_source is null or trim(c.utm_source) = '' then
+            case
+                when c.session_source = 'Direct traffic' then 'No Campaign Tag'
+                when c.session_source = 'Social media' then 'Social'
+                when c.session_source = 'Organic Search' then 'Organic Search'
+                when o.source is not null and trim(o.source) != '' then o.source
+                when c.source is not null and trim(c.source) != '' then c.source
+                else 'Untracked (no UTM)'
+            end
+        else coalesce(c.utm_source, 'Other')
+    end as channel
+from opportunities o
+join contacts c on c.id = o.contact_id
+"""
+
+
+def ensure_lead_records_view() -> None:
+    if not DB_PATH.exists():
+        return
+    con = duckdb.connect(str(DB_PATH))
+    con.execute(LEAD_RECORDS_VIEW)
+    con.close()
+
+
 def save_snapshot() -> None:
     if DB_PATH.exists():
         shutil.copy2(DB_PATH, SNAPSHOT_PATH)
@@ -244,11 +287,13 @@ def save_snapshot() -> None:
 def keep_or_fail(reason: str) -> int:
     if DB_PATH.exists():
         print(f"{reason} — keeping existing GHL data.", file=sys.stderr)
+        ensure_lead_records_view()
         return 0
     if SNAPSHOT_PATH.exists():
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(SNAPSHOT_PATH, DB_PATH)
         print(f"{reason} — restored GHL data from snapshot.", file=sys.stderr)
+        ensure_lead_records_view()
         return 0
     print(f"{reason} — no cached GHL data available.", file=sys.stderr)
     return 1
@@ -321,6 +366,7 @@ def main() -> int:
 
     write_table("contacts", CONTACTS_DDL, contacts, contact_columns)
     write_table("opportunities", OPPORTUNITIES_DDL, opportunities, opportunity_columns)
+    ensure_lead_records_view()
     save_snapshot()
     return 0
 
