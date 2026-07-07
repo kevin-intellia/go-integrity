@@ -12,8 +12,9 @@
 	import { Query } from '@evidence-dev/sdk/usql';
 
 	export let data = undefined;
+	export let showShowingsRequested = true;
 
-	const metrics = [
+	const allMetrics = [
 		{
 			key: 'impressions',
 			title: 'Impressions',
@@ -35,6 +36,10 @@
 			summary: 'Requested a private showing'
 		}
 	];
+
+	$: metrics = showShowingsRequested
+		? allMetrics
+		: allMetrics.filter((metric) => metric.key !== 'appointments_booked');
 
 	const valueFormat = getFormatObjectFromString('#,##0', 'number');
 

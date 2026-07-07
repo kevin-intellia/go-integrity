@@ -35,7 +35,10 @@
 
 	$: metrics = showShowingsBooked
 		? allMetrics
-		: allMetrics.filter((metric) => metric.key !== 'showings_booked');
+		: allMetrics.filter(
+				(metric) =>
+					metric.key !== 'showings_booked' && metric.key !== 'appointments_scheduled'
+			);
 
 	const valueFormat = getFormatObjectFromString('#,##0', 'number');
 
