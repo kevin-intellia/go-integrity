@@ -1,0 +1,4 @@
+name: meta_ads
+type: duckdb
+options:
+  filename: meta_ads.duckdb

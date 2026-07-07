@@ -1,0 +1,4 @@
+name: ghl
+type: duckdb
+options:
+  filename: ghl.duckdb

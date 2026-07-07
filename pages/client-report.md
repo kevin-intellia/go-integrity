@@ -1,0 +1,68 @@
+---
+title: Campaign Performance
+description: Overall lead activity and Facebook ad performance for the last 30 days.
+---
+
+<RefreshDataButton />
+
+<CampaignSummary />
+
+## Overall Lead Activity
+
+All leads and outcomes across every channel — Facebook ads, email, print, and other sources.
+
+```sql crm_totals
+select * from ghl.client_crm_totals
+```
+
+<CrmMetricBlocks data={crm_totals} />
+
+## Lead Sources
+
+All campaigns and channels driving leads into the CRM.
+
+```sql lead_channels
+select channel, leads from ghl.client_lead_channels
+```
+
+<BarChart
+    data={lead_channels}
+    title="Leads by channel"
+    x=channel
+    y=leads
+    swapXY=true
+/>
+
+## Facebook Ad Funnel
+
+```sql funnel_totals
+select
+    m.impressions,
+    m.landing_page_clicks,
+    c.facebook_ad_leads as learn_more_forms,
+    (
+        select count(*)
+        from ghl.client_appointments
+        where channel = 'Facebook Ad'
+    ) as appointments_booked,
+    (select min(date_start) from meta_ads.daily_campaign_insights) as ads_started_on
+from meta_ads.funnel_totals m
+cross join ghl.client_crm_totals c
+```
+
+<FunnelMetricBlocks data={funnel_totals} />
+
+```sql lead_cumulative
+select lead_date_label, cumulative_leads
+from ghl.client_lead_cumulative
+order by lead_date
+```
+
+<LineChart
+    data={lead_cumulative}
+    title="Cumulative Facebook ad leads"
+    x=lead_date_label
+    y=cumulative_leads
+    sort=false
+    yFmt='#,##0'
+/>
