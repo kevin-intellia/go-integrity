@@ -10,6 +10,7 @@ if [ ! -d "$SRC" ]; then
 	exit 1
 fi
 
+rm -rf "$DEST"
 mkdir -p "$DEST"
-rsync -a --delete "$SRC/" "$DEST/"
+cp -a "$SRC"/. "$DEST"/
 echo "Synced Evidence data to static/data"
