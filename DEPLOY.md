@@ -1,35 +1,59 @@
 # Deploy to Cloudflare Pages
 
+Two separate Cloudflare Pages projects share this repo. Each build publishes **only one dashboard** — the other page file is removed before build, so it does not exist on that URL at all.
+
+| Project | Build command | Who visits |
+|---------|---------------|------------|
+| **Client** (existing) | `npm run build:cloudflare:client` | Clients |
+| **Internal** (new) | `npm run build:cloudflare:internal` | Your team |
+
+Client URL example: `https://go-integrity.pages.dev` → `/client-report/` only  
+Internal URL example: `https://go-integrity-internal.pages.dev` → `/meta-ads/` only
+
 ## 1. Push to GitHub
 
 ```bash
 git add .
-git commit -m "Prepare Cloudflare Pages deployment"
+git commit -m "Split client and internal Cloudflare deploys"
 git push -u origin main
 ```
 
 Do **not** commit `.env` — it is gitignored.
 
-## 2. Create the Cloudflare Pages project
+## 2. Client project (public)
 
-1. Log in at [dash.cloudflare.com](https://dash.cloudflare.com)
-2. **Workers & Pages → Create → Pages → Connect to Git**
-3. Select this repository
-4. Choose **Pages** (not Worker). If you see `npx wrangler deploy` in the logs, the project type is wrong.
-
-5. Build settings:
+Use your **existing** Cloudflare Pages project connected to `go-integrity`.
 
 | Setting | Value |
 |--------|--------|
 | **Framework preset** | None |
-| **Build command** | `npm run build:cloudflare` |
+| **Build command** | `npm run build:cloudflare:client` |
 | **Build output directory** | `build` |
-| **Deploy command** | leave empty / default (do **not** use `npx wrangler deploy`) |
-| **Node.js version** | `20` (Environment variables → Production) |
+| **Deploy command** | leave empty (do **not** use `npx wrangler deploy`) |
+| **Node.js version** | `20` |
 
-## 3. Add build environment variables
+Share this project's `*.pages.dev` URL (or custom domain) with the client.
 
-In **Pages → your project → Settings → Build → Variables and secrets** (choose **Build** at the top):
+## 3. Internal project (team)
+
+Create a **second** Pages project from the same repo:
+
+1. **Workers & Pages → Create → Pages → Connect to Git**
+2. Select **`go-integrity`** again
+3. Project name e.g. `go-integrity-internal`
+4. Build settings:
+
+| Setting | Value |
+|--------|--------|
+| **Build command** | `npm run build:cloudflare:internal` |
+| **Build output directory** | `build` |
+| **Node.js version** | `20` |
+
+Bookmark this URL for internal use. Do not share it with clients.
+
+## 4. Build environment variables
+
+Add the same **Build** secrets to **both** projects (Settings → Build → Variables and secrets):
 
 | Variable | Purpose |
 |----------|---------|
@@ -38,33 +62,25 @@ In **Pages → your project → Settings → Build → Variables and secrets** (
 | `GHL_PRIVATE_INTEGRATION_TOKEN` | GHL private integration token |
 | `GHL_LOCATION_ID` | GHL location ID |
 
-These are used during the build to pull fresh data.
+Use **Encrypt** (Secret) for each. After saving, **Retry deployment**.
 
-**Important:** Add each one with **Encrypt** turned on (Secret). Encrypted secrets are reliably available during the build; Plaintext ones often are not.
+## 5. Optional: Refresh button
 
-After saving, open **Deployments → Details → Retry deployment**. A new build should show your variables being used (not `Build environment variables: (none found)`).
+Per project:
 
-## 4. Optional: public Refresh button
-
-1. **Pages → Settings → Builds → Deploy hooks** → Create hook
-2. Copy the hook URL
-3. Add **Functions** variables (Production):
+1. **Settings → Builds → Deploy hooks** → Create hook
+2. Add **Functions** variables (Production):
 
 | Variable | Purpose |
 |----------|---------|
-| `DEPLOY_HOOK_URL` | The deploy hook URL from step 1 |
-| `REFRESH_PASSWORD` | Optional shared password for the refresh button |
+| `DEPLOY_HOOK_URL` | That project's deploy hook URL |
+| `REFRESH_PASSWORD` | Optional |
 
-The refresh button triggers a new deploy (2–3 minutes). If `REFRESH_PASSWORD` is set, you'll be prompted when clicking refresh.
+## 6. Custom domains (optional)
 
-## 5. Optional: password-protect the whole site
+- Client project → e.g. `reports.yourdomain.com`
+- Internal project → e.g. `analytics.yourdomain.com` (or skip and use the `*.pages.dev` URL)
 
-Use **Cloudflare Zero Trust → Access** to require login before anyone can view the report. Free for up to 50 users.
+## Manual update
 
-## 6. Custom domain (optional)
-
-**Pages → Custom domains** → add e.g. `reports.yourdomain.com`
-
-## Manual update without the button
-
-**Pages → Deployments → Retry deployment** runs a fresh build with the latest API data.
+**Deployments → Retry deployment** on either project rebuilds only that dashboard.

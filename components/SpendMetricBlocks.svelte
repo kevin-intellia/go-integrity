@@ -17,20 +17,20 @@
 		{
 			key: 'spend',
 			title: 'Total Spend',
-			summary: 'Ad spend across all campaigns in the last 30 days.',
+			summary: 'Ad spend in the selected period.',
 			format: '$#,##0'
 		},
 		{
 			key: 'meta_leads',
-			title: 'Meta Leads',
-			summary: 'Lead form submissions tracked by Meta pixel.',
+			title: 'Facebook ad leads',
+			summary: 'CRM leads on dates with synced Meta spend in the selected period.',
 			format: '#,##0'
 		},
 		{
 			key: 'cpl_meta',
-			title: 'CPL — Meta',
-			summary: 'Cost per lead based on Meta-reported conversions.',
-			format: '$#,##0'
+			title: 'CPL',
+			summary: 'Ad spend divided by Facebook ad leads on matching spend dates.',
+			format: '$#,##0.00'
 		},
 		{
 			key: 'cpc',
@@ -40,14 +40,14 @@
 		},
 		{
 			key: 'ctr',
-			title: 'CTR',
-			summary: 'Click-through rate: link clicks divided by impressions.',
+			title: 'Link CTR',
+			summary: 'Link clicks divided by impressions (not Meta all-clicks CTR).',
 			format: '0.0"%"'
 		},
 		{
 			key: 'cost_per_showing',
-			title: 'Cost per Showing',
-			summary: 'Spend divided by Meta-reported showing requests.',
+			title: 'Cost per showing',
+			summary: 'Ad spend divided by showings requested in the CRM.',
 			format: '$#,##0'
 		}
 	];

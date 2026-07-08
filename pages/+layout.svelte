@@ -7,12 +7,15 @@
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { addBasePath } from '@evidence-dev/sdk/utils/svelte';
+	import { dev } from '$app/environment';
 	import { onMount, tick } from 'svelte';
 
 	export let data;
 
-	const logoHref = addBasePath('/client-report/');
-	const clientReportHref = addBasePath('/client-report/');
+	const productionHome =
+		import.meta.env.PUBLIC_DEPLOY_TARGET === 'internal' ? '/meta-ads/' : '/client-report/';
+	const homeHref = addBasePath(dev ? '/meta-ads/' : productionHome);
+	const logoHref = homeHref;
 
 	function isRootPath(pathname) {
 		const normalized = pathname.replace(/\/$/, '') || '/';
@@ -20,9 +23,9 @@
 		return normalized === root;
 	}
 
-	function redirectHomeToClientReport() {
+	function redirectHomeToDefaultReport() {
 		if (!browser || !isRootPath($page.url.pathname)) return;
-		goto(clientReportHref, { replaceState: true });
+		goto(homeHref, { replaceState: true });
 	}
 
 	function fixLogoLinks() {
@@ -38,13 +41,13 @@
 	}
 
 	onMount(() => {
-		redirectHomeToClientReport();
+		redirectHomeToDefaultReport();
 		fixLogoLinks();
 	});
 
 	afterNavigate(async () => {
 		await tick();
-		redirectHomeToClientReport();
+		redirectHomeToDefaultReport();
 		fixLogoLinks();
 	});
 </script>

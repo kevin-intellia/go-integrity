@@ -1,6 +1,8 @@
 select
     id,
     contact_name,
+    first_name,
+    last_name,
     email,
     phone,
     source,

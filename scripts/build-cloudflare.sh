@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# client = public client report only; internal = meta-ads dashboard only
+DEPLOY_TARGET="${CLOUDFLARE_DEPLOY_TARGET:-${1:-client}}"
+
 if [ -z "${GHL_PRIVATE_INTEGRATION_TOKEN:-}" ]; then
 	echo "ERROR: GHL_PRIVATE_INTEGRATION_TOKEN is not set."
 	echo "Add it in Cloudflare → Settings → Build → Variables and secrets"
@@ -28,9 +31,12 @@ npm run sources
 echo "Patching Vite config for Cloudflare asset limits..."
 node scripts/patch-vite-config.js
 
-echo "Building static site..."
+echo "Preparing deploy target: $DEPLOY_TARGET"
+bash scripts/prepare-deploy-target.sh "$DEPLOY_TARGET"
+
+echo "Building static site ($DEPLOY_TARGET)..."
 rm -rf build
-npm run build
+PUBLIC_DEPLOY_TARGET="$DEPLOY_TARGET" npm run build
 
 echo "Checking build output file sizes..."
 oversized="$(find build -type f -size +25M 2>/dev/null || true)"

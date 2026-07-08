@@ -74,6 +74,35 @@ INSIGHT_FIELDS = [
     "date_stop",
 ]
 
+DEVICE_INSIGHTS_DDL = """
+    date_start DATE,
+    date_stop DATE,
+    campaign_id VARCHAR,
+    campaign_name VARCHAR,
+    adset_id VARCHAR,
+    adset_name VARCHAR,
+    impression_device VARCHAR,
+    impressions BIGINT,
+    link_clicks BIGINT,
+    spend DOUBLE
+"""
+
+DEVICE_INSIGHTS_INSERT = """
+    INSERT INTO {table} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+DEVICE_INSIGHT_FIELDS = [
+    "campaign_id",
+    "campaign_name",
+    "adset_id",
+    "adset_name",
+    "impressions",
+    "inline_link_clicks",
+    "spend",
+    "date_start",
+    "date_stop",
+]
+
 
 def load_config() -> tuple[str | None, str | None]:
     load_dotenv(ROOT / ".env")
@@ -90,6 +119,8 @@ def fetch_insights(
     *,
     level: str,
     days: int = 30,
+    breakdowns: str | None = None,
+    fields: list[str] | None = None,
 ) -> list[dict]:
     since = (date.today() - timedelta(days=days)).isoformat()
     until = date.today().isoformat()
@@ -98,11 +129,13 @@ def fetch_insights(
     params = {
         "access_token": token,
         "level": level,
-        "fields": ",".join(INSIGHT_FIELDS),
+        "fields": ",".join(fields or INSIGHT_FIELDS),
         "time_range": json.dumps({"since": since, "until": until}),
         "time_increment": 1,
         "limit": 500,
     }
+    if breakdowns:
+        params["breakdowns"] = breakdowns
 
     rows: list[dict] = []
     while url:
@@ -165,6 +198,52 @@ def normalize_row(row: dict) -> dict:
         "conversion_4": conversion_4,
         "conversions": conversion_1 + conversion_2,
     }
+
+
+def normalize_device_row(row: dict) -> dict:
+    return {
+        "date_start": row.get("date_start"),
+        "date_stop": row.get("date_stop"),
+        "campaign_id": row.get("campaign_id"),
+        "campaign_name": row.get("campaign_name"),
+        "adset_id": row.get("adset_id"),
+        "adset_name": row.get("adset_name"),
+        "impression_device": row.get("impression_device") or "unknown",
+        "impressions": int(row.get("impressions") or 0),
+        "link_clicks": int(row.get("inline_link_clicks") or 0),
+        "spend": float(row.get("spend") or 0),
+    }
+
+
+def write_device_insights_table(table: str, rows: list[dict]) -> int:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    normalized = [normalize_device_row(row) for row in rows]
+
+    con = duckdb.connect(str(DB_PATH))
+    con.execute(f"DROP TABLE IF EXISTS {table}")
+    con.execute(f"CREATE TABLE {table} ({DEVICE_INSIGHTS_DDL})")
+    if normalized:
+        con.executemany(
+            DEVICE_INSIGHTS_INSERT.format(table=table),
+            [
+                (
+                    r["date_start"],
+                    r["date_stop"],
+                    r["campaign_id"],
+                    r["campaign_name"],
+                    r["adset_id"],
+                    r["adset_name"],
+                    r["impression_device"],
+                    r["impressions"],
+                    r["link_clicks"],
+                    r["spend"],
+                )
+                for r in normalized
+            ],
+        )
+    con.close()
+    print(f"Synced {len(normalized)} rows to {table}")
+    return len(normalized)
 
 
 def write_insights_table(table: str, rows: list[dict]) -> int:
@@ -244,8 +323,17 @@ def main() -> int:
     try:
         campaign_rows = fetch_insights(token, account_id, level="campaign", days=30)
         adset_rows = fetch_insights(token, account_id, level="adset", days=30)
+        device_rows = fetch_insights(
+            token,
+            account_id,
+            level="adset",
+            days=30,
+            breakdowns="impression_device",
+            fields=DEVICE_INSIGHT_FIELDS,
+        )
         write_insights_table("daily_campaign_insights", campaign_rows)
         write_insights_table("daily_adset_insights", adset_rows)
+        write_device_insights_table("daily_adset_insights_by_device", device_rows)
         save_snapshot()
         return 0
     except requests.RequestException as error:
