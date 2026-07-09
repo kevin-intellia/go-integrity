@@ -16,21 +16,34 @@
 
 	const allMetrics = [
 		{
+			key: 'showings_booked',
+			title: 'Showings booked',
+			summary: 'Private showing form submissions moved to the appointment stage.'
+		},
+		{
+			key: 'showings_disqualified',
+			title: 'Showings disqualified',
+			summary: 'Leads tagged or marked disqualified in the CRM.'
+		},
+		{
+			key: 'showings_requested',
+			title: 'Showings requested',
+			summary: 'Leads moved to the appointment stage in the pipeline.'
+		},
+		{
 			key: 'total_leads',
 			title: 'Total Leads',
 			summary:
 				'Everyone who submitted their information — from Facebook ads, email, print, and other sources.'
-		},
-		{
-			key: 'appointments_scheduled',
-			title: 'Showings requested',
-			summary: 'Leads who requested an appointment.'
 		}
 	];
 
 	$: metrics = showShowingsBooked
 		? allMetrics
-		: allMetrics.filter((metric) => metric.key !== 'appointments_scheduled');
+		: allMetrics.filter(
+				(metric) =>
+					!['showings_booked', 'showings_disqualified', 'showings_requested'].includes(metric.key)
+			);
 
 	const valueFormat = getFormatObjectFromString('#,##0', 'number');
 
@@ -62,7 +75,7 @@
 	<div class="mb-8 h-44 animate-pulse rounded-lg bg-base-200"></div>
 {:else if loaded?.length}
 	{@const row = rowFrom(loaded)}
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-8">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-8">
 		{#each metrics as metric}
 			<div
 				class="flex min-h-[9rem] flex-col gap-2 rounded-lg border border-base-content/20 bg-base-100 p-5"

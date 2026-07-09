@@ -36,11 +36,10 @@
 				return;
 			}
 
-			const password = prompt('Refresh password (leave blank if none):') ?? '';
 			const response = await fetch('/api/trigger-refresh', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ password })
+				body: JSON.stringify({})
 			});
 			const result = await response.json();
 

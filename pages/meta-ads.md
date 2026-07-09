@@ -23,8 +23,6 @@ cross join (
     Data freshness: Meta spend through {meta_data_freshness[0].latest_meta_spend_date}; CRM leads through {meta_data_freshness[0].latest_crm_lead_date}. CPL metrics only count leads on dates with synced Meta spend.
 </p>
 
-<RefreshDataButton />
-
 ```sql report_dates
 select lead_date as report_date from ghl._lead_records
 union all
@@ -46,11 +44,27 @@ select date_start as report_date from meta_ads.daily_campaign_insights
 
 ```sql crm_totals
 select
-    count(*) as total_leads,
-    sum(case when lr.channel = 'Facebook Ads' then 1 else 0 end) as facebook_ad_leads,
+    sum(
+        case
+            when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c'
+             and c.source ilike '%Private Showing%'
+            then 1
+            else 0
+        end
+    ) as showings_booked,
+    sum(
+        case
+            when lower(coalesce(c.tags, '')) like '%disqual%'
+              or lower(coalesce(o.name, '')) like '%disqual%'
+            then 1
+            else 0
+        end
+    ) as showings_disqualified,
     sum(
         case when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c' then 1 else 0 end
-    ) as appointments_scheduled
+    ) as showings_requested,
+    count(*) as total_leads,
+    sum(case when lr.channel = 'Facebook Ads' then 1 else 0 end) as facebook_ad_leads
 from ghl._lead_records lr
 join ghl.opportunities o on o.id = lr.opportunity_id
 join ghl.contacts c on c.id = lr.contact_id
@@ -2864,6 +2878,67 @@ order by lr.lead_date desc, contact_name
     <Column id="pipeline_stage" title="Stage" />
     <Column id="email" title="Email" />
     <Column id="phone" title="Phone" />
+</DataTable>
+
+---
+
+## All leads
+
+Full CRM lead roster for the selected date range. Search runs across every lead in the range (not just the current page). Paginated 50 rows at a time.
+
+```sql all_leads_roster
+select *
+from ghl.all_leads
+where lead_date >= '${inputs.date_range.start}'
+  and lead_date <= '${inputs.date_range.end}'
+order by lead_date desc, contact_name
+```
+
+<DataTable data={all_leads_roster} search=true rows=50 sort="lead_date desc" title="All leads" subtitle="Every CRM lead in the date range. Search spans all rows; table shows 50 per page.">
+    <Column id="contact_name" title="Name" description="Contact name from GoHighLevel." />
+    <Column id="lead_date" title="Lead date" description="Date the lead entered the CRM." />
+    <Column id="pipeline_stage" title="Stage" description="Pipeline stage or opportunity status." />
+    <Column id="channel" title="Channel" description="Marketing channel attributed to this lead." />
+    <Column id="audience" title="Audience" description="Ad audience mapped from UTM term (Facebook leads)." />
+    <Column id="showing_status" title="Showing status" description="Showing requested or booked (appointments only)." />
+    <Column id="entry_point" title="Entry point" description="Form or source that created the lead." />
+    <Column id="email" title="Email" description="Contact email from GoHighLevel." />
+    <Column id="phone" title="Phone" description="Contact phone from GoHighLevel." />
+    <Column id="first_name" title="First name" description="Contact first name." />
+    <Column id="last_name" title="Last name" description="Contact last name." />
+    <Column id="contact_source" title="Contact source" description="Form or source recorded on the contact." />
+    <Column id="contact_type" title="Contact type" description="Contact type in GoHighLevel." />
+    <Column id="contact_date_added" title="Contact added" description="When the contact was created in GoHighLevel." />
+    <Column id="contact_date_updated" title="Contact updated" description="When the contact was last updated." />
+    <Column id="tags" title="Tags" description="Tags applied to the contact." />
+    <Column id="utm_source" title="UTM source" description="UTM source from first-touch attribution." />
+    <Column id="utm_medium" title="UTM medium" description="UTM medium from first-touch attribution." />
+    <Column id="utm_campaign" title="UTM campaign" description="UTM campaign from first-touch attribution." />
+    <Column id="utm_content" title="UTM content" description="UTM content from first-touch attribution." />
+    <Column id="utm_term" title="UTM term" description="UTM term used to map ad audience." />
+    <Column id="utm_keyword" title="UTM keyword" description="UTM keyword from first-touch attribution." />
+    <Column id="device_type" title="Device" description="Device type from first-touch attribution." />
+    <Column id="session_source" title="Session source" description="Session source when no UTM tags are present." />
+    <Column id="referrer" title="Referrer" description="Referring URL from first-touch attribution." />
+    <Column id="page_url" title="Page URL" description="Landing page URL from first-touch attribution." />
+    <Column id="user_agent" title="User agent" description="Browser user agent from first-touch attribution." />
+    <Column id="opportunity_name" title="Opportunity" description="Opportunity name in GoHighLevel." />
+    <Column id="opportunity_status" title="Opp. status" description="Opportunity status in GoHighLevel." />
+    <Column id="opportunity_source" title="Opp. source" description="Source recorded on the opportunity." />
+    <Column id="monetary_value" title="Value" fmt='$#,##0.00' description="Monetary value on the opportunity." />
+    <Column id="opportunity_created" title="Opp. created" description="When the opportunity was created." />
+    <Column id="opportunity_updated" title="Opp. updated" description="When the opportunity was last updated." />
+    <Column id="last_status_change" title="Last status change" description="When the opportunity status last changed." />
+    <Column id="pipeline_id" title="Pipeline ID" description="GoHighLevel pipeline identifier." />
+    <Column id="pipeline_stage_id" title="Stage ID" description="GoHighLevel pipeline stage identifier." />
+    <Column id="opp_utm_source" title="Opp. UTM source" description="UTM source stored on the opportunity." />
+    <Column id="opp_utm_medium" title="Opp. UTM medium" description="UTM medium stored on the opportunity." />
+    <Column id="opp_utm_campaign" title="Opp. UTM campaign" description="UTM campaign stored on the opportunity." />
+    <Column id="opp_utm_content" title="Opp. UTM content" description="UTM content stored on the opportunity." />
+    <Column id="opp_utm_term" title="Opp. UTM term" description="UTM term stored on the opportunity." />
+    <Column id="opp_utm_keyword" title="Opp. UTM keyword" description="UTM keyword stored on the opportunity." />
+    <Column id="opportunity_id" title="Opportunity ID" description="GoHighLevel opportunity identifier." />
+    <Column id="contact_id" title="Contact ID" description="GoHighLevel contact identifier." />
 </DataTable>
 
 ---
