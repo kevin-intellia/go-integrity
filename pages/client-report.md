@@ -153,6 +153,61 @@ order by channel, lead_date
 
 <CumulativeLeadsByChannelChart data={all_leads_cumulative} />
 
+```sql all_leads_daily
+with classified as (
+    select lead_date, channel
+    from ghl._lead_records
+    where lead_date >= '${inputs.date_range.start}'
+      and lead_date <= '${inputs.date_range.end}'
+),
+channels as (
+    select distinct channel from classified
+),
+daily as (
+    select
+        lead_date,
+        channel,
+        count(*) as daily_leads
+    from classified
+    group by 1, 2
+),
+date_span as (
+    select unnest(
+        generate_series(
+            cast('${inputs.date_range.start}' as date),
+            cast('${inputs.date_range.end}' as date),
+            interval 1 day
+        )
+    )::date as lead_date
+),
+channel_dates as (
+    select
+        d.lead_date,
+        c.channel
+    from date_span d
+    cross join channels c
+),
+filled as (
+    select
+        cd.lead_date,
+        cd.channel,
+        coalesce(daily.daily_leads, 0) as daily_leads
+    from channel_dates cd
+    left join daily
+        on cd.lead_date = daily.lead_date
+        and cd.channel = daily.channel
+)
+select
+    lead_date,
+    channel,
+    strftime(lead_date, '%b %d') as lead_date_label,
+    daily_leads
+from filled
+order by channel, lead_date
+```
+
+<DailyLeadsByChannelChart data={all_leads_daily} />
+
 ## Facebook Ads in Detail
 
 Facebook is the largest lead source in this campaign. This section breaks out paid Meta ad performance — impressions, page visits, and lead forms — separately from email, print, and other channels above.

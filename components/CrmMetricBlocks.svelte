@@ -16,6 +16,17 @@
 
 	const allMetrics = [
 		{
+			key: 'total_leads',
+			title: 'Total Leads',
+			summary:
+				'Everyone who submitted their information — from Facebook ads, email, print, and other sources.'
+		},
+		{
+			key: 'showings_requested',
+			title: 'Showings requested',
+			summary: 'Leads moved to the appointment stage in the pipeline.'
+		},
+		{
 			key: 'showings_booked',
 			title: 'Showings booked',
 			summary: 'Private showing form submissions moved to the appointment stage.'
@@ -24,17 +35,6 @@
 			key: 'showings_disqualified',
 			title: 'Showings disqualified',
 			summary: 'Leads tagged or marked disqualified in the CRM.'
-		},
-		{
-			key: 'showings_requested',
-			title: 'Showings requested',
-			summary: 'Leads moved to the appointment stage in the pipeline.'
-		},
-		{
-			key: 'total_leads',
-			title: 'Total Leads',
-			summary:
-				'Everyone who submitted their information — from Facebook ads, email, print, and other sources.'
 		}
 	];
 

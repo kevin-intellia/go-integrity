@@ -234,6 +234,61 @@ order by channel, lead_date
 
 <CumulativeLeadsByChannelChart data={all_leads_cumulative} />
 
+```sql all_leads_daily
+with classified as (
+    select lead_date, channel
+    from ghl._lead_records
+    where lead_date >= '${inputs.date_range.start}'
+      and lead_date <= '${inputs.date_range.end}'
+),
+channels as (
+    select distinct channel from classified
+),
+daily as (
+    select
+        lead_date,
+        channel,
+        count(*) as daily_leads
+    from classified
+    group by 1, 2
+),
+date_span as (
+    select unnest(
+        generate_series(
+            cast('${inputs.date_range.start}' as date),
+            cast('${inputs.date_range.end}' as date),
+            interval 1 day
+        )
+    )::date as lead_date
+),
+channel_dates as (
+    select
+        d.lead_date,
+        c.channel
+    from date_span d
+    cross join channels c
+),
+filled as (
+    select
+        cd.lead_date,
+        cd.channel,
+        coalesce(daily.daily_leads, 0) as daily_leads
+    from channel_dates cd
+    left join daily
+        on cd.lead_date = daily.lead_date
+        and cd.channel = daily.channel
+)
+select
+    lead_date,
+    channel,
+    strftime(lead_date, '%b %d') as lead_date_label,
+    daily_leads
+from filled
+order by channel, lead_date
+```
+
+<DailyLeadsByChannelChart data={all_leads_daily} />
+
 ### Channel performance
 
 Channel mix, appointment rates, and lead volume. The chart shows totals; the table adds showings.
@@ -256,9 +311,9 @@ channel_rows as (
     select
         channel,
         leads,
-        round(100.0 * leads / nullif(sum(leads) over (), 0), 2) as share_pct,
+        round(100.0 * leads / nullif(sum(leads) over (), 0), 2) as lead_share_pct,
         appointments,
-        round(100.0 * appointments / nullif(leads, 0), 2) as appointment_rate_pct,
+        round(100.0 * appointments / nullif(sum(appointments) over (), 0), 2) as appointment_share_pct,
         0 as sort_order
     from base
 ),
@@ -266,13 +321,13 @@ total_row as (
     select
         'Total' as channel,
         sum(leads) as leads,
-        100.0 as share_pct,
+        100.0 as lead_share_pct,
         sum(appointments) as appointments,
-        round(100.0 * sum(appointments) / nullif(sum(leads), 0), 2) as appointment_rate_pct,
+        100.0 as appointment_share_pct,
         1 as sort_order
     from base
 )
-select channel, leads, share_pct, appointments, appointment_rate_pct
+select channel, leads, lead_share_pct, appointments, appointment_share_pct
 from (
     select * from channel_rows
     union all
@@ -281,12 +336,12 @@ from (
 order by sort_order, leads desc, channel
 ```
 
-<DataTable data={lead_breakdown_channel} search=true title="Leads by channel" subtitle="Lead volume, share, and appointment rate for each marketing channel in the CRM.">
+<DataTable data={lead_breakdown_channel} search=true title="Leads by channel" subtitle="Lead volume and appointment mix by channel. Share columns are each a percent of the column total.">
     <Column id="channel" title="Channel" description="Marketing channel attributed to the lead." />
     <Column id="leads" title="Leads" fmt='#,##0' description="Total leads from this channel in the CRM." />
-    <Column id="share_pct" title="Share" fmt='0.0"%"' description="Percent of all leads from this channel." />
+    <Column id="lead_share_pct" title="Lead share" fmt='0.0"%"' description="Share of all leads from this channel." />
     <Column id="appointments" title="Appointments" fmt='#,##0' description="Leads moved to the appointment stage in the CRM." />
-    <Column id="appointment_rate_pct" title="Appt. %" fmt='0.0"%"' description="Appointments as a percent of leads from this channel." />
+    <Column id="appointment_share_pct" title="Appt. share" fmt='0.0"%"' description="Share of all appointments from this channel." />
 </DataTable>
 
 ### Mobile vs non-mobile leads
@@ -311,28 +366,35 @@ with labeled as (
     where lr.lead_date >= '${inputs.date_range.start}'
       and lr.lead_date <= '${inputs.date_range.end}'
 ),
-group_rows as (
+grouped as (
     select
         device_group,
         count(*) as leads,
-        round(100.0 * count(*) / nullif(sum(count(*)) over (), 0), 2) as share_pct,
-        sum(is_appointment) as appointments,
-        round(100.0 * sum(is_appointment) / nullif(count(*), 0), 2) as appointment_rate_pct,
-        0 as sort_order
+        sum(is_appointment) as appointments
     from labeled
     group by 1
+),
+group_rows as (
+    select
+        device_group,
+        leads,
+        round(100.0 * leads / nullif(sum(leads) over (), 0), 2) as lead_share_pct,
+        appointments,
+        round(100.0 * appointments / nullif(sum(appointments) over (), 0), 2) as appointment_share_pct,
+        0 as sort_order
+    from grouped
 ),
 total_row as (
     select
         'Total' as device_group,
-        count(*) as leads,
-        100.0 as share_pct,
-        sum(is_appointment) as appointments,
-        round(100.0 * sum(is_appointment) / nullif(count(*), 0), 2) as appointment_rate_pct,
+        sum(leads) as leads,
+        100.0 as lead_share_pct,
+        sum(appointments) as appointments,
+        100.0 as appointment_share_pct,
         1 as sort_order
-    from labeled
+    from grouped
 )
-select device_group, leads, share_pct, appointments, appointment_rate_pct
+select device_group, leads, lead_share_pct, appointments, appointment_share_pct
 from (
     select * from group_rows
     union all
@@ -347,12 +409,12 @@ order by sort_order,
     end
 ```
 
-<DataTable data={mobile_lead_breakdown} search=true title="Device summary" subtitle="All CRM leads grouped by mobile, non-mobile (desktop), or unknown device type.">
+<DataTable data={mobile_lead_breakdown} search=true title="Device summary" subtitle="All CRM leads grouped by mobile, non-mobile (desktop), or unknown device type. Share columns are each a percent of the column total.">
     <Column id="device_group" title="Device" description="Mobile, non-mobile (desktop), or unknown." />
     <Column id="leads" title="Leads" fmt='#,##0' description="Total CRM leads on this device type." />
-    <Column id="share_pct" title="Share" fmt='0.0"%"' description="Percent of all leads on this device type." />
+    <Column id="lead_share_pct" title="Lead share" fmt='0.0"%"' description="Share of all leads on this device type." />
     <Column id="appointments" title="Appointments" fmt='#,##0' description="Leads moved to the appointment stage." />
-    <Column id="appointment_rate_pct" title="Appt. %" fmt='0.0"%"' description="Appointments as a percent of leads." />
+    <Column id="appointment_share_pct" title="Appt. share" fmt='0.0"%"' description="Share of all appointments on this device type." />
 </DataTable>
 
 ```sql mobile_leads_by_channel
@@ -390,7 +452,54 @@ order by total_leads desc, channel
     <Column id="mobile_pct" title="Mobile %" fmt='0.0"%"' description="Mobile leads as a percent of channel total." />
 </DataTable>
 
-### Key trends
+```sql mobile_pct_over_time
+with daily as (
+    select
+        lr.lead_date,
+        count(*) as total_leads,
+        sum(
+            case when c.device_type in ('ios', 'android', 'mobile_other') then 1 else 0 end
+        ) as mobile_leads
+    from ghl._lead_records lr
+    join ghl.contacts c on c.id = lr.contact_id
+    where lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
+    group by 1
+),
+date_span as (
+    select unnest(
+        generate_series(
+            cast('${inputs.date_range.start}' as date),
+            cast('${inputs.date_range.end}' as date),
+            interval 1 day
+        )
+    )::date as lead_date
+),
+filled as (
+    select
+        d.lead_date,
+        coalesce(daily.total_leads, 0) as total_leads,
+        coalesce(daily.mobile_leads, 0) as mobile_leads
+    from date_span d
+    left join daily on d.lead_date = daily.lead_date
+)
+select
+    lead_date,
+    strftime(lead_date, '%b %d') as lead_date_label,
+    round(100.0 * mobile_leads / nullif(total_leads, 0), 2) as mobile_pct
+from filled
+where total_leads > 0
+order by lead_date
+```
+
+<LineChart
+    data={mobile_pct_over_time}
+    title="Mobile share of leads over time"
+    x=lead_date_label
+    y=mobile_pct
+    sort=false
+    yFmt='0.0"%"'
+/>
 
 ```sql daily_leads_by_channel
 with classified as (
@@ -448,55 +557,6 @@ order by lead_date, channel
 
 
 
-```sql mobile_pct_over_time
-with daily as (
-    select
-        lr.lead_date,
-        count(*) as total_leads,
-        sum(
-            case when c.device_type in ('ios', 'android', 'mobile_other') then 1 else 0 end
-        ) as mobile_leads
-    from ghl._lead_records lr
-    join ghl.contacts c on c.id = lr.contact_id
-    where lr.lead_date >= '${inputs.date_range.start}'
-      and lr.lead_date <= '${inputs.date_range.end}'
-    group by 1
-),
-date_span as (
-    select unnest(
-        generate_series(
-            cast('${inputs.date_range.start}' as date),
-            cast('${inputs.date_range.end}' as date),
-            interval 1 day
-        )
-    )::date as lead_date
-),
-filled as (
-    select
-        d.lead_date,
-        coalesce(daily.total_leads, 0) as total_leads,
-        coalesce(daily.mobile_leads, 0) as mobile_leads
-    from date_span d
-    left join daily on d.lead_date = daily.lead_date
-)
-select
-    lead_date,
-    strftime(lead_date, '%b %d') as lead_date_label,
-    round(100.0 * mobile_leads / nullif(total_leads, 0), 2) as mobile_pct
-from filled
-where total_leads > 0
-order by lead_date
-```
-
-<LineChart
-    data={mobile_pct_over_time}
-    title="Mobile share of leads over time"
-    x=lead_date_label
-    y=mobile_pct
-    sort=false
-    yFmt='0.0"%"'
-/>
-
 ```sql leads_by_day_of_week
 select
     case dayofweek(lead_date)
@@ -524,29 +584,6 @@ order by day_order
     y=leads
 />
 
-```sql channel_mix_weekly
-select
-    date_trunc('week', lead_date)::date as week_start,
-    strftime(date_trunc('week', lead_date)::date, '%b %d') as week_label,
-    channel,
-    count(*) as leads
-from ghl._lead_records
-where lead_date >= '${inputs.date_range.start}'
-  and lead_date <= '${inputs.date_range.end}'
-group by 1, 2, 3
-order by week_start, channel
-```
-
-<AreaChart
-    data={channel_mix_weekly}
-    title="Channel mix over time (weekly)"
-    x=week_label
-    y=leads
-    series=channel
-    type=stacked
-    sort=false
-/>
-
 ### All appointments
 
 Every lead in the CRM who requested or booked a showing.
@@ -558,7 +595,7 @@ where lead_date >= '${inputs.date_range.start}'
   and lead_date <= '${inputs.date_range.end}'
 ```
 
-<DataTable data={all_appointments} search=true rows=25 title="All appointments detail" subtitle="Full contact and opportunity fields for each showing request.">
+<ScrollStableDataTable data={all_appointments} search=true rows=25 title="All appointments detail" subtitle="Full contact and opportunity fields for each showing request.">
     <Column id="contact_name" title="Name" description="Contact name from GoHighLevel." />
     <Column id="showing_status" title="Status" description="Showing requested or booked via private showing form." />
     <Column id="lead_date" title="Lead date" description="Date the lead entered the CRM." />
@@ -601,7 +638,7 @@ where lead_date >= '${inputs.date_range.start}'
     <Column id="opp_utm_keyword" title="Opp. UTM keyword" description="UTM keyword stored on the opportunity." />
     <Column id="opportunity_id" title="Opportunity ID" description="GoHighLevel opportunity identifier." />
     <Column id="contact_id" title="Contact ID" description="GoHighLevel contact identifier." />
-</DataTable>
+</ScrollStableDataTable>
 
 ---
 
@@ -787,6 +824,7 @@ order by stage_order
 <FunnelChart
     data={facebook_funnel_chart}
     title="Facebook funnel"
+    subtitle="Facebook CRM leads and showings currently in the appointment stage, limited to dates with synced Meta ad spend."
     nameCol=stage_name
     valueCol=value
 />
