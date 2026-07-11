@@ -45,29 +45,12 @@ select date_start as report_date from meta_ads.daily_campaign_insights
 ```sql crm_totals
 select
     sum(
-        case
-            when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c'
-             and c.source ilike '%Private Showing%'
-            then 1
-            else 0
-        end
-    ) as showings_booked,
-    sum(
-        case
-            when lower(coalesce(c.tags, '')) like '%disqual%'
-              or lower(coalesce(o.name, '')) like '%disqual%'
-            then 1
-            else 0
-        end
-    ) as showings_disqualified,
-    sum(
         case when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c' then 1 else 0 end
     ) as showings_requested,
     count(*) as total_leads,
     sum(case when lr.channel = 'Facebook Ads' then 1 else 0 end) as facebook_ad_leads
 from ghl._lead_records lr
 join ghl.opportunities o on o.id = lr.opportunity_id
-join ghl.contacts c on c.id = lr.contact_id
 where lr.lead_date >= '${inputs.date_range.start}'
   and lr.lead_date <= '${inputs.date_range.end}'
 ```

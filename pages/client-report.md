@@ -35,7 +35,7 @@ where lead_date >= '${inputs.date_range.start}'
   and lead_date <= '${inputs.date_range.end}'
 ```
 
-<CrmMetricBlocks data={crm_totals} showShowingsBooked={false} />
+<CrmMetricBlocks data={crm_totals} showShowingsRequested={false} />
 
 ## Lead Sources
 

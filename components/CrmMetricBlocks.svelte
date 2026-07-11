@@ -12,7 +12,7 @@
 	import { Query } from '@evidence-dev/sdk/usql';
 
 	export let data = undefined;
-	export let showShowingsBooked = true;
+	export let showShowingsRequested = true;
 
 	const allMetrics = [
 		{
@@ -25,25 +25,12 @@
 			key: 'showings_requested',
 			title: 'Showings requested',
 			summary: 'Leads moved to the appointment stage in the pipeline.'
-		},
-		{
-			key: 'showings_booked',
-			title: 'Showings booked',
-			summary: 'Private showing form submissions moved to the appointment stage.'
-		},
-		{
-			key: 'showings_disqualified',
-			title: 'Showings disqualified',
-			summary: 'Leads tagged or marked disqualified in the CRM.'
 		}
 	];
 
-	$: metrics = showShowingsBooked
+	$: metrics = showShowingsRequested
 		? allMetrics
-		: allMetrics.filter(
-				(metric) =>
-					!['showings_booked', 'showings_disqualified', 'showings_requested'].includes(metric.key)
-			);
+		: allMetrics.filter((metric) => metric.key !== 'showings_requested');
 
 	const valueFormat = getFormatObjectFromString('#,##0', 'number');
 
@@ -75,7 +62,7 @@
 	<div class="mb-8 h-44 animate-pulse rounded-lg bg-base-200"></div>
 {:else if loaded?.length}
 	{@const row = rowFrom(loaded)}
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-8">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-8">
 		{#each metrics as metric}
 			<div
 				class="flex min-h-[9rem] flex-col gap-2 rounded-lg border border-base-content/20 bg-base-100 p-5"
