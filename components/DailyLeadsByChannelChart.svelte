@@ -41,22 +41,27 @@
 		return totals;
 	}
 
+	function sortByLeadDate(rows) {
+		return [...rows].sort((a, b) => String(a.lead_date).localeCompare(String(b.lead_date)));
+	}
+
 	$: allRows = rowsFrom(loaded);
 	$: totalsByChannel = channelTotals(allRows);
 	$: totalLeadsInRange = [...totalsByChannel.values()].reduce((sum, value) => sum + value, 0);
 	$: allLeadsRows = (() => {
 		const byDate = new Map();
 		for (const row of allRows) {
-			const current = byDate.get(row.lead_date) ?? {
-				lead_date: row.lead_date,
+			const dateKey = String(row.lead_date).slice(0, 10);
+			const current = byDate.get(dateKey) ?? {
+				lead_date: dateKey,
 				lead_date_label: row.lead_date_label,
 				channel: ALL_LEADS,
 				daily_leads: 0
 			};
 			current.daily_leads += Number(row.daily_leads) || 0;
-			byDate.set(row.lead_date, current);
+			byDate.set(dateKey, current);
 		}
-		return [...byDate.values()].sort((a, b) => String(a.lead_date).localeCompare(String(b.lead_date)));
+		return sortByLeadDate([...byDate.values()]);
 	})();
 	$: availableChannels = [ALL_LEADS, ...[...totalsByChannel.entries()]
 		.sort((a, b) => b[1] - a[1])
@@ -66,10 +71,11 @@
 		selectedChannel = ALL_LEADS;
 	}
 
-	$: filteredRows =
+	$: filteredRows = sortByLeadDate(
 		selectedChannel === ALL_LEADS
 			? allLeadsRows
-			: allRows.filter((row) => row.channel === selectedChannel);
+			: allRows.filter((row) => row.channel === selectedChannel)
+	);
 
 	$: leadsInRange =
 		selectedChannel === ALL_LEADS
@@ -102,9 +108,10 @@
 	<LineChart
 		data={filteredRows}
 		title="Daily leads by channel"
-		x=lead_date_label
+		x=lead_date
 		y=daily_leads
-		sort=false
+		sort=true
+		xFmt='mmm dd'
 		yFmt='#,##0'
 		legend=false
 	/>
