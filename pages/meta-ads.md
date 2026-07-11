@@ -143,6 +143,60 @@ order by leads desc
     swapXY=true
 />
 
+```sql daily_leads_by_channel
+with classified as (
+    select lead_date, channel
+    from ghl._lead_records
+    where lead_date >= '${inputs.date_range.start}'
+      and lead_date <= '${inputs.date_range.end}'
+),
+daily as (
+    select lead_date, channel, count(*) as daily_leads
+    from classified
+    group by 1, 2
+),
+channels as (
+    select distinct channel from classified
+),
+date_span as (
+    select unnest(
+        generate_series(
+            cast('${inputs.date_range.start}' as date),
+            cast('${inputs.date_range.end}' as date),
+            interval 1 day
+        )
+    )::date as lead_date
+),
+filled as (
+    select
+        d.lead_date,
+        c.channel,
+        coalesce(daily.daily_leads, 0) as daily_leads
+    from date_span d
+    cross join channels c
+    left join daily
+        on d.lead_date = daily.lead_date
+       and c.channel = daily.channel
+)
+select
+    lead_date,
+    strftime(lead_date, '%b %d') as lead_date_label,
+    channel,
+    daily_leads
+from filled
+where daily_leads > 0
+order by lead_date, channel
+```
+
+<LineChart
+    data={daily_leads_by_channel}
+    title="Daily leads by channel"
+    x=lead_date_label
+    y=daily_leads
+    series=channel
+    sort=false
+/>
+
 ### Leads over time
 
 ```sql all_leads_cumulative
@@ -336,7 +390,7 @@ from (
 order by sort_order, leads desc, channel
 ```
 
-<DataTable data={lead_breakdown_channel} search=true title="Leads by channel" subtitle="Lead volume and appointment mix by channel. Share columns are each a percent of the column total.">
+<DataTable data={lead_breakdown_channel} search=true rows=50 title="Leads by channel" subtitle="Lead volume and appointment mix by channel. Share columns are each a percent of the column total.">
     <Column id="channel" title="Channel" description="Marketing channel attributed to the lead." />
     <Column id="leads" title="Leads" fmt='#,##0' description="Total leads from this channel in the CRM." />
     <Column id="lead_share_pct" title="Lead share" fmt='0.0"%"' description="Share of all leads from this channel." />
@@ -501,60 +555,6 @@ order by lead_date
     yFmt='0.0"%"'
 />
 
-```sql daily_leads_by_channel
-with classified as (
-    select lead_date, channel
-    from ghl._lead_records
-    where lead_date >= '${inputs.date_range.start}'
-      and lead_date <= '${inputs.date_range.end}'
-),
-daily as (
-    select lead_date, channel, count(*) as daily_leads
-    from classified
-    group by 1, 2
-),
-channels as (
-    select distinct channel from classified
-),
-date_span as (
-    select unnest(
-        generate_series(
-            cast('${inputs.date_range.start}' as date),
-            cast('${inputs.date_range.end}' as date),
-            interval 1 day
-        )
-    )::date as lead_date
-),
-filled as (
-    select
-        d.lead_date,
-        c.channel,
-        coalesce(daily.daily_leads, 0) as daily_leads
-    from date_span d
-    cross join channels c
-    left join daily
-        on d.lead_date = daily.lead_date
-       and c.channel = daily.channel
-)
-select
-    lead_date,
-    strftime(lead_date, '%b %d') as lead_date_label,
-    channel,
-    daily_leads
-from filled
-where daily_leads > 0
-order by lead_date, channel
-```
-
-<LineChart
-    data={daily_leads_by_channel}
-    title="Daily leads by channel"
-    x=lead_date_label
-    y=daily_leads
-    series=channel
-    sort=false
-/>
-
 
 
 ```sql leads_by_day_of_week
@@ -584,61 +584,27 @@ order by day_order
     y=leads
 />
 
-### All appointments
+### CRM roster
 
-Every lead in the CRM who requested or booked a showing.
+Searchable lead and showing detail for the selected date range.
+
+```sql all_leads_roster
+select *
+from ghl.all_leads
+where lead_date >= '${inputs.date_range.start}'
+  and lead_date <= '${inputs.date_range.end}'
+order by lead_date desc, contact_name
+```
 
 ```sql all_appointments
 select *
 from ghl.all_appointments
 where lead_date >= '${inputs.date_range.start}'
   and lead_date <= '${inputs.date_range.end}'
+order by lead_date desc, contact_name
 ```
 
-<ScrollStableDataTable data={all_appointments} search=true rows=25 title="All appointments detail" subtitle="Full contact and opportunity fields for each showing request.">
-    <Column id="contact_name" title="Name" description="Contact name from GoHighLevel." />
-    <Column id="showing_status" title="Status" description="Showing requested or booked via private showing form." />
-    <Column id="lead_date" title="Lead date" description="Date the lead entered the CRM." />
-    <Column id="channel" title="Channel" description="Marketing channel attributed to this lead." />
-    <Column id="audience" title="Audience" description="Ad audience mapped from UTM term." />
-    <Column id="email" title="Email" description="Contact email from GoHighLevel." />
-    <Column id="phone" title="Phone" description="Contact phone from GoHighLevel." />
-    <Column id="first_name" title="First name" description="Contact first name." />
-    <Column id="last_name" title="Last name" description="Contact last name." />
-    <Column id="contact_source" title="Contact source" description="Form or source recorded on the contact." />
-    <Column id="contact_type" title="Contact type" description="Contact type in GoHighLevel." />
-    <Column id="contact_date_added" title="Contact added" description="When the contact was created in GoHighLevel." />
-    <Column id="contact_date_updated" title="Contact updated" description="When the contact was last updated." />
-    <Column id="tags" title="Tags" description="Tags applied to the contact." />
-    <Column id="utm_source" title="UTM source" description="UTM source from first-touch attribution." />
-    <Column id="utm_medium" title="UTM medium" description="UTM medium from first-touch attribution." />
-    <Column id="utm_campaign" title="UTM campaign" description="UTM campaign from first-touch attribution." />
-    <Column id="utm_content" title="UTM content" description="UTM content from first-touch attribution." />
-    <Column id="utm_term" title="UTM term" description="UTM term used to map ad audience." />
-    <Column id="utm_keyword" title="UTM keyword" description="UTM keyword from first-touch attribution." />
-    <Column id="device_type" title="Device" description="Device type from first-touch attribution." />
-    <Column id="session_source" title="Session source" description="Session source when no UTM tags are present." />
-    <Column id="referrer" title="Referrer" description="Referring URL from first-touch attribution." />
-    <Column id="page_url" title="Page URL" description="Landing page URL from first-touch attribution." />
-    <Column id="user_agent" title="User agent" description="Browser user agent from first-touch attribution." />
-    <Column id="opportunity_name" title="Opportunity" description="Opportunity name in GoHighLevel." />
-    <Column id="opportunity_status" title="Opp. status" description="Opportunity status in GoHighLevel." />
-    <Column id="opportunity_source" title="Opp. source" description="Source recorded on the opportunity." />
-    <Column id="monetary_value" title="Value" fmt='$#,##0.00' description="Monetary value on the opportunity." />
-    <Column id="opportunity_created" title="Opp. created" description="When the opportunity was created." />
-    <Column id="opportunity_updated" title="Opp. updated" description="When the opportunity was last updated." />
-    <Column id="last_status_change" title="Last status change" description="When the opportunity status last changed." />
-    <Column id="pipeline_id" title="Pipeline ID" description="GoHighLevel pipeline identifier." />
-    <Column id="pipeline_stage_id" title="Stage ID" description="GoHighLevel pipeline stage identifier." />
-    <Column id="opp_utm_source" title="Opp. UTM source" description="UTM source stored on the opportunity." />
-    <Column id="opp_utm_medium" title="Opp. UTM medium" description="UTM medium stored on the opportunity." />
-    <Column id="opp_utm_campaign" title="Opp. UTM campaign" description="UTM campaign stored on the opportunity." />
-    <Column id="opp_utm_content" title="Opp. UTM content" description="UTM content stored on the opportunity." />
-    <Column id="opp_utm_term" title="Opp. UTM term" description="UTM term stored on the opportunity." />
-    <Column id="opp_utm_keyword" title="Opp. UTM keyword" description="UTM keyword stored on the opportunity." />
-    <Column id="opportunity_id" title="Opportunity ID" description="GoHighLevel opportunity identifier." />
-    <Column id="contact_id" title="Contact ID" description="GoHighLevel contact identifier." />
-</ScrollStableDataTable>
+<LeadShowingsRosterTabs leadsData={all_leads_roster} showingsData={all_appointments} />
 
 ---
 
@@ -806,268 +772,9 @@ order by stage_order
     subtitle="Facebook CRM leads and showings currently in the appointment stage, for the selected date range."
     nameCol=stage_name
     valueCol=value
+    valueFmt='#,##0'
+    showPercent=true
 />
-
-### Static vs dynamic creative
-
-Compares **Static** (Geo Targeting - Non-Dynamic Creative) against **Dynamic** (Geo Targeting - Dynamic Creative and Multi-Geo Targeting - Dynamic Creative). Meta metrics come from campaign names; CRM leads are classified from `utm_campaign`.
-
-```sql creative_type_comparison
-with meta as (
-    select
-        case
-            when lower(campaign_name) like '%non%dynamic%' then 'Static'
-            when lower(campaign_name) like '%dynamic creative%' then 'Dynamic'
-            else 'Other'
-        end as creative_type,
-        sum(spend) as spend,
-        sum(impressions) as impressions,
-        sum(link_clicks) as link_clicks
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-    group by 1
-),
-crm as (
-    select
-        case
-            when lower(c.utm_campaign) like '%non%dynamic%' then 'Static'
-            when lower(c.utm_campaign) like '%dynamic creative%' then 'Dynamic'
-            else 'Other'
-        end as creative_type,
-        count(*) as facebook_leads,
-        sum(
-            case when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c' then 1 else 0 end
-        ) as showings
-    from ghl._lead_records lr
-    join ghl.contacts c on c.id = lr.contact_id
-    join ghl.opportunities o on o.id = lr.opportunity_id
-    where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= '${inputs.date_range.start}'
-      and lr.lead_date <= '${inputs.date_range.end}'
-    group by 1
-),
-joined as (
-    select
-        t.creative_type,
-        round(coalesce(m.spend, 0), 2) as spend,
-        round(100.0 * coalesce(m.spend, 0) / nullif(sum(coalesce(m.spend, 0)) over (), 0), 2) as spend_share_pct,
-        coalesce(m.impressions, 0) as impressions,
-        coalesce(m.link_clicks, 0) as page_visits,
-        round(100.0 * coalesce(m.link_clicks, 0) / nullif(coalesce(m.impressions, 0), 0), 2) as link_ctr,
-        round(coalesce(m.spend, 0) / nullif(coalesce(m.link_clicks, 0), 0), 2) as cpc,
-        coalesce(c.facebook_leads, 0) as facebook_leads,
-        round(100.0 * coalesce(c.facebook_leads, 0) / nullif(sum(coalesce(c.facebook_leads, 0)) over (), 0), 2) as lead_share_pct,
-        coalesce(c.showings, 0) as showings,
-        round(coalesce(m.spend, 0) / nullif(coalesce(c.facebook_leads, 0), 0), 2) as cpl,
-        round(100.0 * coalesce(c.showings, 0) / nullif(coalesce(c.facebook_leads, 0), 0), 2) as showing_rate_pct
-    from (values ('Static'), ('Dynamic'), ('Other')) as t(creative_type)
-    left join meta m on m.creative_type = t.creative_type
-    left join crm c on c.creative_type = t.creative_type
-    where t.creative_type in ('Static', 'Dynamic')
-       or coalesce(m.spend, 0) > 0
-       or coalesce(c.facebook_leads, 0) > 0
-),
-type_rows as (
-    select *, 0 as sort_order from joined
-),
-total_row as (
-    select
-        'Total' as creative_type,
-        round(sum(spend), 2) as spend,
-        100.0 as spend_share_pct,
-        sum(impressions) as impressions,
-        sum(page_visits) as page_visits,
-        round(100.0 * sum(page_visits) / nullif(sum(impressions), 0), 2) as link_ctr,
-        round(sum(spend) / nullif(sum(page_visits), 0), 2) as cpc,
-        sum(facebook_leads) as facebook_leads,
-        100.0 as lead_share_pct,
-        sum(showings) as showings,
-        round(sum(spend) / nullif(sum(facebook_leads), 0), 2) as cpl,
-        round(100.0 * sum(showings) / nullif(sum(facebook_leads), 0), 2) as showing_rate_pct,
-        1 as sort_order
-    from joined
-)
-select
-    creative_type,
-    spend,
-    spend_share_pct,
-    impressions,
-    page_visits,
-    link_ctr,
-    cpc,
-    facebook_leads,
-    lead_share_pct,
-    showings,
-    cpl,
-    showing_rate_pct
-from (
-    select * from type_rows
-    union all
-    select * from total_row
-) combined
-order by sort_order, spend desc, creative_type
-```
-
-<DataTable data={creative_type_comparison} search=true title="Static vs dynamic comparison" subtitle="Meta delivery and CRM outcomes for static and dynamic creative campaigns.">
-    <Column id="creative_type" title="Creative type" description="Static = fixed creative assets. Dynamic = Meta dynamic creative optimization." />
-    <Column id="spend" title="Spend" fmt='$#,##0.00' description="Ad spend from Meta." />
-    <Column id="spend_share_pct" title="Spend %" fmt='0.0"%"' description="Share of total Facebook ad spend." />
-    <Column id="impressions" title="Impressions" fmt='#,##0' description="Times ads appeared on screen (Meta)." />
-    <Column id="page_visits" title="Page visits" fmt='#,##0' description="Landing page link clicks (Meta)." />
-    <Column id="link_ctr" title="Link CTR" fmt='0.0"%"' description="Link clicks divided by impressions." />
-    <Column id="cpc" title="CPC" fmt='$#,##0.00' description="Cost per link click." />
-    <Column id="facebook_leads" title="CRM leads" fmt='#,##0' description="Facebook ad leads in the CRM." />
-    <Column id="lead_share_pct" title="Lead %" fmt='0.0"%"' description="Share of Facebook ad leads in the CRM." />
-    <Column id="showings" title="Showings" fmt='#,##0' description="Leads moved to appointment stage." />
-    <Column id="cpl" title="CPL" fmt='$#,##0.00' description="Spend divided by CRM leads." />
-    <Column id="showing_rate_pct" title="Showing %" fmt='0.0"%"' description="Showings as a percent of CRM leads." />
-</DataTable>
-
-<Grid cols=2>
-    <BarChart
-        data={creative_type_comparison}
-        title="Spend by creative type"
-        x=creative_type
-        y=spend
-        where="creative_type != 'Total'"
-        yFmt=usd
-    />
-    <BarChart
-        data={creative_type_comparison}
-        title="CRM leads by creative type"
-        x=creative_type
-        y=facebook_leads
-        where="creative_type != 'Total'"
-    />
-</Grid>
-
-```sql creative_type_daily_spend
-with daily as (
-    select
-        date_start as report_date,
-        case
-            when lower(campaign_name) like '%non%dynamic%' then 'Static'
-            when lower(campaign_name) like '%dynamic creative%' then 'Dynamic'
-            else 'Other'
-        end as creative_type,
-        round(sum(spend), 2) as spend
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-    group by 1, 2
-),
-date_span as (
-    select unnest(
-        generate_series(
-            cast('${inputs.date_range.start}' as date),
-            cast('${inputs.date_range.end}' as date),
-            interval 1 day
-        )
-    )::date as report_date
-),
-types as (
-    select 'Static' as creative_type
-    union all
-    select 'Dynamic'
-)
-select
-    d.report_date,
-    strftime(d.report_date, '%b %d') as report_date_label,
-    t.creative_type,
-    coalesce(daily.spend, 0) as spend
-from date_span d
-cross join types t
-left join daily
-    on d.report_date = daily.report_date
-   and t.creative_type = daily.creative_type
-order by d.report_date, t.creative_type
-```
-
-<LineChart
-    data={creative_type_daily_spend}
-    title="Daily spend by creative type"
-    x=report_date_label
-    y=spend
-    series=creative_type
-    sort=false
-    yFmt=usd
-/>
-
-```sql creative_type_by_audience
-with meta as (
-    select
-        adset_name as audience,
-        case
-            when lower(campaign_name) like '%non%dynamic%' then 'Static'
-            when lower(campaign_name) like '%dynamic creative%' then 'Dynamic'
-            else 'Other'
-        end as creative_type,
-        sum(spend) as spend,
-        sum(link_clicks) as link_clicks
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-    group by 1, 2
-),
-crm as (
-    select
-        case c.utm_term
-            when '120250101870600306' then 'VT & NH'
-            when '120250101883590306' then 'VT & NH'
-            when '120250093236920306' then 'NYC 15 Miles'
-            when '120250091197620306' then 'NYC 15 Miles'
-            when '120250093748420306' then 'Westchester / Hudson Valley'
-            when '120250091788420306' then 'Westchester / Hudson Valley'
-            when '120250091674470306' then 'Long Island Gold Coast/Hamptons'
-            when '120250093766560306' then 'Long Island Gold Coast/Hamptons'
-            when '120250093727620306' then 'NJ Shore'
-            when '120250091847730306' then 'NJ Shore'
-            when '120250091623250306' then 'Connecticut Gold Coast'
-            when '120250093630920306' then 'Connecticut Gold Coast'
-            else 'Unattributed'
-        end as audience,
-        case
-            when lower(c.utm_campaign) like '%non%dynamic%' then 'Static'
-            when lower(c.utm_campaign) like '%dynamic creative%' then 'Dynamic'
-            else 'Other'
-        end as creative_type,
-        count(*) as facebook_leads
-    from ghl._lead_records lr
-    join ghl.contacts c on c.id = lr.contact_id
-    where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= '${inputs.date_range.start}'
-      and lr.lead_date <= '${inputs.date_range.end}'
-    group by 1, 2
-),
-joined as (
-    select
-        m.audience,
-        m.creative_type,
-        round(m.spend, 2) as spend,
-        m.link_clicks as page_visits,
-        coalesce(c.facebook_leads, 0) as facebook_leads,
-        round(m.spend / nullif(coalesce(c.facebook_leads, 0), 0), 2) as cpl
-    from meta m
-    left join crm c
-        on c.audience = m.audience
-       and c.creative_type = m.creative_type
-    where m.creative_type in ('Static', 'Dynamic')
-    and (coalesce(c.facebook_leads, 0) > 0 or m.spend >= 50)
-)
-select audience, creative_type, spend, page_visits, facebook_leads, cpl
-from joined
-order by creative_type, spend desc, audience
-```
-
-<DataTable data={creative_type_by_audience} search=true title="Performance by audience and creative type" subtitle="Audiences with meaningful spend or CRM leads. National campaign geos without UTM-matched leads are hidden.">
-    <Column id="audience" title="Audience" description="Geographic ad audience from Meta." />
-    <Column id="creative_type" title="Creative type" description="Static or dynamic creative campaign." />
-    <Column id="spend" title="Spend" fmt='$#,##0.00' />
-    <Column id="page_visits" title="Page visits" fmt='#,##0' />
-    <Column id="facebook_leads" title="CRM leads" fmt='#,##0' />
-    <Column id="cpl" title="CPL" fmt='$#,##0.00' />
-</DataTable>
 
 ### Audience breakdown
 
@@ -1635,24 +1342,187 @@ order by date_start, audience
 />
 
 
-### Trends & diagnostics
+### Static vs dynamic creative
 
-Additional CPL, delivery, and device mix charts.
+Compares **Static** (Geo Targeting - Non-Dynamic Creative) against **Dynamic** (Geo Targeting - Dynamic Creative and Multi-Geo Targeting - Dynamic Creative). Meta metrics come from campaign names; CRM leads are classified from `utm_campaign`.
 
-```sql cpl_by_audience_weekly
-with weekly_meta as (
+```sql creative_type_comparison
+with meta as (
     select
-        date_trunc('week', date_start)::date as week_start,
-        adset_name as audience,
-        sum(spend) as spend
+        case
+            when lower(campaign_name) like '%non%dynamic%' then 'Static'
+            when lower(campaign_name) like '%dynamic creative%' then 'Dynamic'
+            else 'Other'
+        end as creative_type,
+        sum(spend) as spend,
+        sum(impressions) as impressions,
+        sum(link_clicks) as link_clicks
+    from meta_ads.daily_adset_insights
+    where date_start >= '${inputs.date_range.start}'
+      and date_start <= '${inputs.date_range.end}'
+    group by 1
+),
+crm as (
+    select
+        case
+            when lower(c.utm_campaign) like '%non%dynamic%' then 'Static'
+            when lower(c.utm_campaign) like '%dynamic creative%' then 'Dynamic'
+            else 'Other'
+        end as creative_type,
+        count(*) as facebook_leads,
+        sum(
+            case when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c' then 1 else 0 end
+        ) as showings
+    from ghl._lead_records lr
+    join ghl.contacts c on c.id = lr.contact_id
+    join ghl.opportunities o on o.id = lr.opportunity_id
+    where lr.channel = 'Facebook Ads'
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
+    group by 1
+),
+joined as (
+    select
+        t.creative_type,
+        round(coalesce(m.spend, 0), 2) as spend,
+        round(100.0 * coalesce(m.spend, 0) / nullif(sum(coalesce(m.spend, 0)) over (), 0), 2) as spend_share_pct,
+        coalesce(m.impressions, 0) as impressions,
+        coalesce(m.link_clicks, 0) as page_visits,
+        round(100.0 * coalesce(m.link_clicks, 0) / nullif(coalesce(m.impressions, 0), 0), 2) as link_ctr,
+        round(coalesce(m.spend, 0) / nullif(coalesce(m.link_clicks, 0), 0), 2) as cpc,
+        coalesce(c.facebook_leads, 0) as facebook_leads,
+        round(100.0 * coalesce(c.facebook_leads, 0) / nullif(sum(coalesce(c.facebook_leads, 0)) over (), 0), 2) as lead_share_pct,
+        coalesce(c.showings, 0) as showings,
+        round(coalesce(m.spend, 0) / nullif(coalesce(c.facebook_leads, 0), 0), 2) as cpl,
+        round(100.0 * coalesce(c.showings, 0) / nullif(coalesce(c.facebook_leads, 0), 0), 2) as showing_rate_pct
+    from (values ('Static'), ('Dynamic'), ('Other')) as t(creative_type)
+    left join meta m on m.creative_type = t.creative_type
+    left join crm c on c.creative_type = t.creative_type
+    where t.creative_type in ('Static', 'Dynamic')
+       or coalesce(m.spend, 0) > 0
+       or coalesce(c.facebook_leads, 0) > 0
+),
+type_rows as (
+    select * from joined
+)
+select
+    creative_type,
+    spend,
+    spend_share_pct,
+    impressions,
+    page_visits,
+    link_ctr,
+    cpc,
+    facebook_leads,
+    lead_share_pct,
+    showings,
+    cpl,
+    showing_rate_pct
+from type_rows
+order by spend desc, creative_type
+```
+
+<DataTable data={creative_type_comparison} search=true title="Static vs dynamic comparison" subtitle="Meta delivery and CRM outcomes for static and dynamic creative campaigns.">
+    <Column id="creative_type" title="Creative type" description="Static = fixed creative assets. Dynamic = Meta dynamic creative optimization." />
+    <Column id="spend" title="Spend" fmt='$#,##0.00' description="Ad spend from Meta." />
+    <Column id="spend_share_pct" title="Spend %" fmt='0.0"%"' description="Share of total Facebook ad spend." />
+    <Column id="impressions" title="Impressions" fmt='#,##0' description="Times ads appeared on screen (Meta)." />
+    <Column id="page_visits" title="Page visits" fmt='#,##0' description="Landing page link clicks (Meta)." />
+    <Column id="link_ctr" title="Link CTR" fmt='0.0"%"' description="Link clicks divided by impressions." />
+    <Column id="cpc" title="CPC" fmt='$#,##0.00' description="Cost per link click." />
+    <Column id="facebook_leads" title="CRM leads" fmt='#,##0' description="Facebook ad leads in the CRM." />
+    <Column id="lead_share_pct" title="Lead %" fmt='0.0"%"' description="Share of Facebook ad leads in the CRM." />
+    <Column id="showings" title="Showings" fmt='#,##0' description="Leads moved to appointment stage." />
+    <Column id="cpl" title="CPL" fmt='$#,##0.00' description="Spend divided by CRM leads." />
+    <Column id="showing_rate_pct" title="Showing %" fmt='0.0"%"' description="Showings as a percent of CRM leads." />
+</DataTable>
+
+<Grid cols=2>
+    <BarChart
+        data={creative_type_comparison}
+        title="Spend by creative type"
+        x=creative_type
+        y=spend
+        yFmt=usd
+    />
+    <BarChart
+        data={creative_type_comparison}
+        title="CRM leads by creative type"
+        x=creative_type
+        y=facebook_leads
+    />
+</Grid>
+
+```sql creative_type_daily_spend
+with daily as (
+    select
+        date_start as report_date,
+        case
+            when lower(campaign_name) like '%non%dynamic%' then 'Static'
+            when lower(campaign_name) like '%dynamic creative%' then 'Dynamic'
+            else 'Other'
+        end as creative_type,
+        round(sum(spend), 2) as spend
     from meta_ads.daily_adset_insights
     where date_start >= '${inputs.date_range.start}'
       and date_start <= '${inputs.date_range.end}'
     group by 1, 2
 ),
-weekly_crm as (
+date_span as (
+    select unnest(
+        generate_series(
+            cast('${inputs.date_range.start}' as date),
+            cast('${inputs.date_range.end}' as date),
+            interval 1 day
+        )
+    )::date as report_date
+),
+types as (
+    select 'Static' as creative_type
+    union all
+    select 'Dynamic'
+)
+select
+    d.report_date,
+    strftime(d.report_date, '%b %d') as report_date_label,
+    t.creative_type,
+    coalesce(daily.spend, 0) as spend
+from date_span d
+cross join types t
+left join daily
+    on d.report_date = daily.report_date
+   and t.creative_type = daily.creative_type
+order by d.report_date, t.creative_type
+```
+
+<LineChart
+    data={creative_type_daily_spend}
+    title="Daily spend by creative type"
+    x=report_date_label
+    y=spend
+    series=creative_type
+    sort=false
+    yFmt=usd
+/>
+
+```sql creative_type_by_audience
+with meta as (
     select
-        date_trunc('week', lr.lead_date)::date as week_start,
+        adset_name as audience,
+        case
+            when lower(campaign_name) like '%non%dynamic%' then 'Static'
+            when lower(campaign_name) like '%dynamic creative%' then 'Dynamic'
+            else 'Other'
+        end as creative_type,
+        sum(spend) as spend,
+        sum(link_clicks) as link_clicks
+    from meta_ads.daily_adset_insights
+    where date_start >= '${inputs.date_range.start}'
+      and date_start <= '${inputs.date_range.end}'
+    group by 1, 2
+),
+crm as (
+    select
         case c.utm_term
             when '120250101870600306' then 'VT & NH'
             when '120250101883590306' then 'VT & NH'
@@ -1668,64 +1538,6 @@ weekly_crm as (
             when '120250093630920306' then 'Connecticut Gold Coast'
             else 'Unattributed'
         end as audience,
-        count(*) as facebook_leads
-    from ghl._lead_records lr
-    join ghl.contacts c on c.id = lr.contact_id
-    where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= '${inputs.date_range.start}'
-      and lr.lead_date <= '${inputs.date_range.end}'
-    group by 1, 2
-),
-joined as (
-    select
-        coalesce(m.week_start, c.week_start) as week_start,
-        coalesce(m.audience, c.audience) as audience,
-        coalesce(m.spend, 0) as spend,
-        coalesce(c.facebook_leads, 0) as facebook_leads
-    from weekly_meta m
-    full outer join weekly_crm c
-        on m.week_start = c.week_start
-       and m.audience = c.audience
-)
-select
-    week_start,
-    strftime(week_start, '%b %d') as week_label,
-    audience,
-    round(spend / nullif(facebook_leads, 0), 2) as cpl
-from joined
-where audience != 'Unattributed'
-  and (spend > 0 or facebook_leads > 0)
-order by week_start, audience
-```
-
-<LineChart
-    data={cpl_by_audience_weekly}
-    title="CPL by audience (weekly)"
-    x=week_label
-    y=cpl
-    series=audience
-    sort=false
-    yFmt=usd
-/>
-
-```sql creative_type_cpl_weekly
-with weekly_meta as (
-    select
-        date_trunc('week', date_start)::date as week_start,
-        case
-            when lower(campaign_name) like '%non%dynamic%' then 'Static'
-            when lower(campaign_name) like '%dynamic creative%' then 'Dynamic'
-            else 'Other'
-        end as creative_type,
-        sum(spend) as spend
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-    group by 1, 2
-),
-weekly_crm as (
-    select
-        date_trunc('week', lr.lead_date)::date as week_start,
         case
             when lower(c.utm_campaign) like '%non%dynamic%' then 'Static'
             when lower(c.utm_campaign) like '%dynamic creative%' then 'Dynamic'
@@ -1741,30 +1553,234 @@ weekly_crm as (
 ),
 joined as (
     select
-        coalesce(m.week_start, c.week_start) as week_start,
-        coalesce(m.creative_type, c.creative_type) as creative_type,
-        coalesce(m.spend, 0) as spend,
-        coalesce(c.facebook_leads, 0) as facebook_leads
-    from weekly_meta m
-    full outer join weekly_crm c
-        on m.week_start = c.week_start
-       and m.creative_type = c.creative_type
+        m.audience,
+        m.creative_type,
+        round(m.spend, 2) as spend,
+        m.link_clicks as page_visits,
+        coalesce(c.facebook_leads, 0) as facebook_leads,
+        round(m.spend / nullif(coalesce(c.facebook_leads, 0), 0), 2) as cpl
+    from meta m
+    left join crm c
+        on c.audience = m.audience
+       and c.creative_type = m.creative_type
+    where m.creative_type in ('Static', 'Dynamic')
+    and (coalesce(c.facebook_leads, 0) > 0 or m.spend >= 50)
+)
+select audience, creative_type, spend, page_visits, facebook_leads, cpl
+from joined
+order by creative_type, spend desc, audience
+```
+
+<DataTable data={creative_type_by_audience} search=true title="Performance by audience and creative type" subtitle="Audiences with meaningful spend or CRM leads. National campaign geos without UTM-matched leads are hidden.">
+    <Column id="audience" title="Audience" description="Geographic ad audience from Meta." />
+    <Column id="creative_type" title="Creative type" description="Static or dynamic creative campaign." />
+    <Column id="spend" title="Spend" fmt='$#,##0.00' />
+    <Column id="page_visits" title="Page visits" fmt='#,##0' />
+    <Column id="facebook_leads" title="CRM leads" fmt='#,##0' />
+    <Column id="cpl" title="CPL" fmt='$#,##0.00' />
+</DataTable>
+
+
+### Trends & diagnostics
+
+Additional CPL, delivery, and device mix charts.
+
+```sql cpl_by_audience_over_time
+with daily_meta as (
+    select
+        date_start as report_date,
+        adset_name as audience,
+        sum(spend) as spend
+    from meta_ads.daily_adset_insights
+    where date_start >= '${inputs.date_range.start}'
+      and date_start <= '${inputs.date_range.end}'
+    group by 1, 2
+),
+daily_crm as (
+    select
+        lr.lead_date as report_date,
+        case c.utm_term
+            when '120250101870600306' then 'VT & NH'
+            when '120250101883590306' then 'VT & NH'
+            when '120250093236920306' then 'NYC 15 Miles'
+            when '120250091197620306' then 'NYC 15 Miles'
+            when '120250093748420306' then 'Westchester / Hudson Valley'
+            when '120250091788420306' then 'Westchester / Hudson Valley'
+            when '120250091674470306' then 'Long Island Gold Coast/Hamptons'
+            when '120250093766560306' then 'Long Island Gold Coast/Hamptons'
+            when '120250093727620306' then 'NJ Shore'
+            when '120250091847730306' then 'NJ Shore'
+            when '120250091623250306' then 'Connecticut Gold Coast'
+            when '120250093630920306' then 'Connecticut Gold Coast'
+            else 'Unattributed'
+        end as audience,
+        count(*) as leads
+    from ghl._lead_records lr
+    join ghl.contacts c on c.id = lr.contact_id
+    where lr.channel = 'Facebook Ads'
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
+    group by 1, 2
+),
+audiences as (
+    select distinct audience
+    from (
+        select audience from daily_meta
+        union
+        select audience from daily_crm
+    )
+    where audience != 'Unattributed'
+),
+date_span as (
+    select unnest(generate_series(
+        cast('${inputs.date_range.start}' as date),
+        cast('${inputs.date_range.end}' as date),
+        interval 1 day
+    ))::date as report_date
+),
+grid as (
+    select d.report_date, a.audience
+    from date_span d
+    cross join audiences a
+),
+filled as (
+    select
+        g.report_date,
+        g.audience,
+        coalesce(m.spend, 0) as daily_spend,
+        coalesce(c.leads, 0) as daily_leads
+    from grid g
+    left join daily_meta m
+        on g.report_date = m.report_date
+       and g.audience = m.audience
+    left join daily_crm c
+        on g.report_date = c.report_date
+       and g.audience = c.audience
 )
 select
-    week_start,
-    strftime(week_start, '%b %d') as week_label,
-    creative_type,
-    round(spend / nullif(facebook_leads, 0), 2) as cpl
-from joined
-where creative_type in ('Static', 'Dynamic')
-  and (spend > 0 or facebook_leads > 0)
-order by week_start, creative_type
+    report_date,
+    strftime(report_date, '%b %d') as report_date_label,
+    audience,
+    round(
+        sum(daily_spend) over (
+            partition by audience
+            order by report_date
+            rows between unbounded preceding and current row
+        ) / nullif(
+            sum(daily_leads) over (
+                partition by audience
+                order by report_date
+                rows between unbounded preceding and current row
+            ),
+            0
+        ),
+        2
+    ) as cpl
+from filled
+order by report_date, audience
 ```
 
 <LineChart
-    data={creative_type_cpl_weekly}
-    title="CPL by creative type (weekly)"
-    x=week_label
+    data={cpl_by_audience_over_time}
+    title="CPL by audience over time"
+    subtitle="Cumulative ad spend divided by cumulative Facebook ad leads in the CRM, by audience."
+    x=report_date_label
+    y=cpl
+    series=audience
+    sort=false
+    yFmt=usd
+/>
+
+```sql cpl_by_creative_type_over_time
+with daily_meta as (
+    select
+        date_start as report_date,
+        case
+            when lower(campaign_name) like '%non%dynamic%' then 'Static'
+            when lower(campaign_name) like '%dynamic creative%' then 'Dynamic'
+            else 'Other'
+        end as creative_type,
+        sum(spend) as spend
+    from meta_ads.daily_adset_insights
+    where date_start >= '${inputs.date_range.start}'
+      and date_start <= '${inputs.date_range.end}'
+    group by 1, 2
+),
+daily_crm as (
+    select
+        lr.lead_date as report_date,
+        case
+            when lower(c.utm_campaign) like '%non%dynamic%' then 'Static'
+            when lower(c.utm_campaign) like '%dynamic creative%' then 'Dynamic'
+            else 'Other'
+        end as creative_type,
+        count(*) as leads
+    from ghl._lead_records lr
+    join ghl.contacts c on c.id = lr.contact_id
+    where lr.channel = 'Facebook Ads'
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
+    group by 1, 2
+),
+creative_types as (
+    select 'Static' as creative_type
+    union all
+    select 'Dynamic'
+),
+date_span as (
+    select unnest(generate_series(
+        cast('${inputs.date_range.start}' as date),
+        cast('${inputs.date_range.end}' as date),
+        interval 1 day
+    ))::date as report_date
+),
+grid as (
+    select d.report_date, t.creative_type
+    from date_span d
+    cross join creative_types t
+),
+filled as (
+    select
+        g.report_date,
+        g.creative_type,
+        coalesce(m.spend, 0) as daily_spend,
+        coalesce(c.leads, 0) as daily_leads
+    from grid g
+    left join daily_meta m
+        on g.report_date = m.report_date
+       and g.creative_type = m.creative_type
+    left join daily_crm c
+        on g.report_date = c.report_date
+       and g.creative_type = c.creative_type
+)
+select
+    report_date,
+    strftime(report_date, '%b %d') as report_date_label,
+    creative_type,
+    round(
+        sum(daily_spend) over (
+            partition by creative_type
+            order by report_date
+            rows between unbounded preceding and current row
+        ) / nullif(
+            sum(daily_leads) over (
+                partition by creative_type
+                order by report_date
+                rows between unbounded preceding and current row
+            ),
+            0
+        ),
+        2
+    ) as cpl
+from filled
+order by report_date, creative_type
+```
+
+<LineChart
+    data={cpl_by_creative_type_over_time}
+    title="CPL by creative type over time"
+    subtitle="Cumulative ad spend divided by cumulative Facebook ad leads in the CRM, by creative type."
+    x=report_date_label
     y=cpl
     series=creative_type
     sort=false
@@ -2806,67 +2822,6 @@ order by lr.lead_date desc, contact_name
     <Column id="pipeline_stage" title="Stage" />
     <Column id="email" title="Email" />
     <Column id="phone" title="Phone" />
-</DataTable>
-
----
-
-## All leads
-
-Full CRM lead roster for the selected date range. Search runs across every lead in the range (not just the current page). Paginated 50 rows at a time.
-
-```sql all_leads_roster
-select *
-from ghl.all_leads
-where lead_date >= '${inputs.date_range.start}'
-  and lead_date <= '${inputs.date_range.end}'
-order by lead_date desc, contact_name
-```
-
-<DataTable data={all_leads_roster} search=true rows=50 sort="lead_date desc" title="All leads" subtitle="Every CRM lead in the date range. Search spans all rows; table shows 50 per page.">
-    <Column id="contact_name" title="Name" description="Contact name from GoHighLevel." />
-    <Column id="lead_date" title="Lead date" description="Date the lead entered the CRM." />
-    <Column id="pipeline_stage" title="Stage" description="Pipeline stage or opportunity status." />
-    <Column id="channel" title="Channel" description="Marketing channel attributed to this lead." />
-    <Column id="audience" title="Audience" description="Ad audience mapped from UTM term (Facebook leads)." />
-    <Column id="showing_status" title="Showing status" description="Showing requested or booked (appointments only)." />
-    <Column id="entry_point" title="Entry point" description="Form or source that created the lead." />
-    <Column id="email" title="Email" description="Contact email from GoHighLevel." />
-    <Column id="phone" title="Phone" description="Contact phone from GoHighLevel." />
-    <Column id="first_name" title="First name" description="Contact first name." />
-    <Column id="last_name" title="Last name" description="Contact last name." />
-    <Column id="contact_source" title="Contact source" description="Form or source recorded on the contact." />
-    <Column id="contact_type" title="Contact type" description="Contact type in GoHighLevel." />
-    <Column id="contact_date_added" title="Contact added" description="When the contact was created in GoHighLevel." />
-    <Column id="contact_date_updated" title="Contact updated" description="When the contact was last updated." />
-    <Column id="tags" title="Tags" description="Tags applied to the contact." />
-    <Column id="utm_source" title="UTM source" description="UTM source from first-touch attribution." />
-    <Column id="utm_medium" title="UTM medium" description="UTM medium from first-touch attribution." />
-    <Column id="utm_campaign" title="UTM campaign" description="UTM campaign from first-touch attribution." />
-    <Column id="utm_content" title="UTM content" description="UTM content from first-touch attribution." />
-    <Column id="utm_term" title="UTM term" description="UTM term used to map ad audience." />
-    <Column id="utm_keyword" title="UTM keyword" description="UTM keyword from first-touch attribution." />
-    <Column id="device_type" title="Device" description="Device type from first-touch attribution." />
-    <Column id="session_source" title="Session source" description="Session source when no UTM tags are present." />
-    <Column id="referrer" title="Referrer" description="Referring URL from first-touch attribution." />
-    <Column id="page_url" title="Page URL" description="Landing page URL from first-touch attribution." />
-    <Column id="user_agent" title="User agent" description="Browser user agent from first-touch attribution." />
-    <Column id="opportunity_name" title="Opportunity" description="Opportunity name in GoHighLevel." />
-    <Column id="opportunity_status" title="Opp. status" description="Opportunity status in GoHighLevel." />
-    <Column id="opportunity_source" title="Opp. source" description="Source recorded on the opportunity." />
-    <Column id="monetary_value" title="Value" fmt='$#,##0.00' description="Monetary value on the opportunity." />
-    <Column id="opportunity_created" title="Opp. created" description="When the opportunity was created." />
-    <Column id="opportunity_updated" title="Opp. updated" description="When the opportunity was last updated." />
-    <Column id="last_status_change" title="Last status change" description="When the opportunity status last changed." />
-    <Column id="pipeline_id" title="Pipeline ID" description="GoHighLevel pipeline identifier." />
-    <Column id="pipeline_stage_id" title="Stage ID" description="GoHighLevel pipeline stage identifier." />
-    <Column id="opp_utm_source" title="Opp. UTM source" description="UTM source stored on the opportunity." />
-    <Column id="opp_utm_medium" title="Opp. UTM medium" description="UTM medium stored on the opportunity." />
-    <Column id="opp_utm_campaign" title="Opp. UTM campaign" description="UTM campaign stored on the opportunity." />
-    <Column id="opp_utm_content" title="Opp. UTM content" description="UTM content stored on the opportunity." />
-    <Column id="opp_utm_term" title="Opp. UTM term" description="UTM term stored on the opportunity." />
-    <Column id="opp_utm_keyword" title="Opp. UTM keyword" description="UTM keyword stored on the opportunity." />
-    <Column id="opportunity_id" title="Opportunity ID" description="GoHighLevel opportunity identifier." />
-    <Column id="contact_id" title="Contact ID" description="GoHighLevel contact identifier." />
 </DataTable>
 
 ---

@@ -58,11 +58,9 @@
 	}
 
 	$: if (availableChannels.length && filterInitialized) {
-		const next = new Set([...selectedChannels].filter((channel) => availableChannels.includes(channel)));
-		if (next.size === 0) {
-			selectedChannels = new Set(availableChannels);
-		} else if (next.size !== selectedChannels.size) {
-			selectedChannels = next;
+		const pruned = [...selectedChannels].filter((channel) => availableChannels.includes(channel));
+		if (pruned.length !== selectedChannels.size) {
+			selectedChannels = new Set(pruned);
 		}
 	}
 
@@ -74,7 +72,7 @@
 	function toggleChannel(channel) {
 		const next = new Set(selectedChannels);
 		if (next.has(channel)) {
-			if (next.size > 1) next.delete(channel);
+			next.delete(channel);
 		} else {
 			next.add(channel);
 		}
@@ -87,6 +85,10 @@
 
 	function selectTopChannels(count) {
 		selectedChannels = new Set(availableChannels.slice(0, count));
+	}
+
+	function clearAllChannels() {
+		selectedChannels = new Set();
 	}
 
 	const echartsOptions = {
@@ -160,6 +162,13 @@
 				>
 					Top 5
 				</button>
+				<button
+					type="button"
+					class="rounded-md border border-base-content/20 px-2.5 py-1 text-xs hover:bg-base-200"
+					on:click={clearAllChannels}
+				>
+					Remove all
+				</button>
 				<label class="flex items-center gap-2 rounded-md border border-base-content/20 px-2.5 py-1 text-xs">
 					<input type="checkbox" bind:checked={showAllLine} />
 					Total line
@@ -192,7 +201,7 @@
 		seriesOrder={['All']}
 		sort=false
 		yFmt='#,##0'
-		legend=true
+		legend=false
 		seriesColors={{ All: '#e4e4e7' }}
 		{echartsOptions}
 	/>

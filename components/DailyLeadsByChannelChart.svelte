@@ -9,6 +9,8 @@
 
 	export let data = undefined;
 
+	const ALL_LEADS = 'All leads';
+
 	let loaded = undefined;
 	let unsub = () => {};
 	let selectedChannel = '';
@@ -41,15 +43,38 @@
 
 	$: allRows = rowsFrom(loaded);
 	$: totalsByChannel = channelTotals(allRows);
-	$: availableChannels = [...totalsByChannel.entries()]
+	$: totalLeadsInRange = [...totalsByChannel.values()].reduce((sum, value) => sum + value, 0);
+	$: allLeadsRows = (() => {
+		const byDate = new Map();
+		for (const row of allRows) {
+			const current = byDate.get(row.lead_date) ?? {
+				lead_date: row.lead_date,
+				lead_date_label: row.lead_date_label,
+				channel: ALL_LEADS,
+				daily_leads: 0
+			};
+			current.daily_leads += Number(row.daily_leads) || 0;
+			byDate.set(row.lead_date, current);
+		}
+		return [...byDate.values()].sort((a, b) => String(a.lead_date).localeCompare(String(b.lead_date)));
+	})();
+	$: availableChannels = [ALL_LEADS, ...[...totalsByChannel.entries()]
 		.sort((a, b) => b[1] - a[1])
-		.map(([channel]) => channel);
+		.map(([channel]) => channel)];
 
 	$: if (availableChannels.length && !availableChannels.includes(selectedChannel)) {
-		selectedChannel = availableChannels[0];
+		selectedChannel = ALL_LEADS;
 	}
 
-	$: filteredRows = allRows.filter((row) => row.channel === selectedChannel);
+	$: filteredRows =
+		selectedChannel === ALL_LEADS
+			? allLeadsRows
+			: allRows.filter((row) => row.channel === selectedChannel);
+
+	$: leadsInRange =
+		selectedChannel === ALL_LEADS
+			? totalLeadsInRange
+			: totalsByChannel.get(selectedChannel) ?? 0;
 </script>
 
 {#if loaded?.error}
@@ -70,7 +95,7 @@
 			</select>
 		</label>
 		<p class="text-sm text-base-content-muted">
-			{totalsByChannel.get(selectedChannel)?.toLocaleString('en-US') ?? 0} leads in range
+			{leadsInRange.toLocaleString('en-US')} leads in range
 		</p>
 	</div>
 
