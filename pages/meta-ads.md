@@ -6,7 +6,7 @@ hide_toc: false
 ---
 
 <p class="text-sm text-base-content-muted mb-4">
-    Internal campaign analytics across all channels. Meta spend and CRM leads use matching dates wherever CPL is calculated. Use the date range filter to explore different periods.
+    Internal campaign analytics across all channels. Meta spend and CRM leads both respect the selected date range. Use the date range filter to explore different periods.
 </p>
 
 ```sql meta_data_freshness
@@ -20,7 +20,7 @@ cross join (
 ```
 
 <p class="text-xs text-base-content-muted mb-4">
-    Data freshness: Meta spend through {meta_data_freshness[0].latest_meta_spend_date}; CRM leads through {meta_data_freshness[0].latest_crm_lead_date}. CPL metrics only count leads on dates with synced Meta spend.
+    Data freshness: Meta spend through {meta_data_freshness[0].latest_meta_spend_date}; CRM leads through {meta_data_freshness[0].latest_crm_lead_date}.
 </p>
 
 ```sql report_dates
@@ -648,7 +648,7 @@ Paid Meta campaigns attributed in the CRM via `utm_source=facebook` and `utm_med
 
 ### Spend and efficiency
 
-CRM leads are counted only on dates with synced Meta spend so CPL isn't diluted by leads on days without ad data.
+CRM leads and showings use the selected date range; Meta spend metrics use the same date range filter.
 
 ```sql spend_totals
 with meta as (
@@ -658,9 +658,7 @@ with meta as (
         sum(link_clicks) as link_clicks,
         round(100.0 * sum(link_clicks) / nullif(sum(impressions), 0), 2) as ctr,
         round(sum(spend) / nullif(sum(link_clicks), 0), 2) as cpc,
-        round(1000.0 * sum(spend) / nullif(sum(impressions), 0), 2) as cpm,
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
+        round(1000.0 * sum(spend) / nullif(sum(impressions), 0), 2) as cpm
     from meta_ads.daily_campaign_insights
     where date_start >= '${inputs.date_range.start}'
       and date_start <= '${inputs.date_range.end}'
@@ -673,10 +671,9 @@ crm as (
         ) as showing_requests
     from ghl._lead_records lr
     join ghl.opportunities o on o.id = lr.opportunity_id
-    cross join meta m
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(m.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(m.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
 )
 select
     m.spend,
@@ -705,31 +702,22 @@ with daily_spend as (
       and date_start <= '${inputs.date_range.end}'
     group by 1
 ),
-spend_bounds as (
-    select
-        min(report_date) as min_date,
-        max(report_date) as max_date
-    from daily_spend
-),
 daily_leads as (
     select
         lr.lead_date as report_date,
         count(*) as leads
     from ghl._lead_records lr
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.min_date, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.max_date, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1
 ),
 date_span as (
-    select unnest(
-        generate_series(
-            (select min_date from spend_bounds),
-            (select max_date from spend_bounds),
-            interval 1 day
-        )
-    )::date as report_date
+    select unnest(generate_series(
+        cast('${inputs.date_range.start}' as date),
+        cast('${inputs.date_range.end}' as date),
+        interval 1 day
+    ))::date as report_date
 ),
 filled as (
     select
@@ -779,15 +767,7 @@ order by report_date
 />
 
 ```sql facebook_funnel_chart
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-meta as (
+with meta as (
     select
         sum(impressions) as impressions,
         sum(link_clicks) as page_visits
@@ -803,10 +783,9 @@ crm as (
         ) as showings
     from ghl._lead_records lr
     join ghl.opportunities o on o.id = lr.opportunity_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
 )
 select stage_name, stage_order, value
 from (
@@ -824,7 +803,7 @@ order by stage_order
 <FunnelChart
     data={facebook_funnel_chart}
     title="Facebook funnel"
-    subtitle="Facebook CRM leads and showings currently in the appointment stage, limited to dates with synced Meta ad spend."
+    subtitle="Facebook CRM leads and showings currently in the appointment stage, for the selected date range."
     nameCol=stage_name
     valueCol=value
 />
@@ -834,15 +813,7 @@ order by stage_order
 Compares **Static** (Geo Targeting - Non-Dynamic Creative) against **Dynamic** (Geo Targeting - Dynamic Creative and Multi-Geo Targeting - Dynamic Creative). Meta metrics come from campaign names; CRM leads are classified from `utm_campaign`.
 
 ```sql creative_type_comparison
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-meta as (
+with meta as (
     select
         case
             when lower(campaign_name) like '%non%dynamic%' then 'Static'
@@ -871,10 +842,9 @@ crm as (
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
     join ghl.opportunities o on o.id = lr.opportunity_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1
 ),
 joined as (
@@ -1025,15 +995,7 @@ order by d.report_date, t.creative_type
 />
 
 ```sql creative_type_by_audience
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-meta as (
+with meta as (
     select
         adset_name as audience,
         case
@@ -1073,10 +1035,9 @@ crm as (
         count(*) as facebook_leads
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1, 2
 ),
 joined as (
@@ -1113,15 +1074,7 @@ order by creative_type, spend desc, audience
 Spend, delivery metrics, and CRM outcomes for each geographic ad audience.
 
 ```sql adset_efficiency
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-by_adset as (
+with by_adset as (
     select
         adset_name,
         sum(spend) as spend,
@@ -1152,10 +1105,9 @@ crm_leads as (
         count(*) as facebook_leads
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1
 ),
 crm_showings as (
@@ -1179,11 +1131,10 @@ crm_showings as (
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
     join ghl.opportunities o on o.id = lr.opportunity_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
       and o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1
 ),
 joined as (
@@ -1273,15 +1224,7 @@ order by sort_order, spend desc
 Conversion rates from impressions through showings for each audience.
 
 ```sql adset_funnel
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-by_audience as (
+with by_audience as (
     select
         adset_name as audience,
         sum(impressions) as impressions,
@@ -1311,10 +1254,9 @@ crm_leads as (
         count(*) as facebook_leads
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1
 ),
 crm_showings as (
@@ -1338,11 +1280,10 @@ crm_showings as (
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
     join ghl.opportunities o on o.id = lr.opportunity_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
       and o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1
 ),
 joined as (
@@ -1419,15 +1360,7 @@ order by sort_order, audience
 How mobile and desktop perform across Meta delivery and CRM leads. Meta device comes from impression delivery; CRM device comes from landing-page user agent — they measure different things.
 
 ```sql device_breakdown
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-meta_by_device as (
+with meta_by_device as (
     select
         case lower(impression_device)
             when 'desktop' then 'Desktop'
@@ -1455,10 +1388,9 @@ crm_leads_by_device as (
         count(*) as facebook_leads
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1
 ),
 crm_showings_by_device as (
@@ -1474,11 +1406,10 @@ crm_showings_by_device as (
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
     join ghl.opportunities o on o.id = lr.opportunity_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
       and o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1
 ),
 all_leads_by_device as (
@@ -1591,7 +1522,7 @@ with daily as (
     select
         date_start as report_date,
         round(sum(spend), 2) as spend
-    from meta_ads.daily_campaign_insights
+    from meta_ads.daily_adset_insights
     where date_start >= '${inputs.date_range.start}'
       and date_start <= '${inputs.date_range.end}'
     group by 1
@@ -1633,7 +1564,7 @@ with daily as (
                 'Geo Targeting - Non-Dynamic Creative'
             ) then 'Northeast'
             when campaign_name = 'Multi-Geo Targeting - Dynamic Creative' then 'National'
-            else campaign_name
+            else 'Other'
         end as campaign_group,
         round(sum(spend), 2) as spend
     from meta_ads.daily_adset_insights
@@ -1651,9 +1582,11 @@ date_span as (
     )::date as report_date
 ),
 groups as (
-    select 'Northeast' as campaign_group
+    select 'Northeast' as campaign_group, 1 as sort_order
     union all
-    select 'National'
+    select 'National', 2
+    union all
+    select 'Other', 3
 )
 select
     d.report_date,
@@ -1665,7 +1598,9 @@ cross join groups g
 left join daily
     on d.report_date = daily.report_date
    and g.campaign_group = daily.campaign_group
-order by d.report_date, g.campaign_group
+where coalesce(daily.spend, 0) > 0
+   or g.campaign_group in ('Northeast', 'National')
+order by d.report_date, g.sort_order
 ```
 
 <LineChart
@@ -1705,15 +1640,7 @@ order by date_start, audience
 Additional CPL, delivery, and device mix charts.
 
 ```sql cpl_by_audience_weekly
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-weekly_meta as (
+with weekly_meta as (
     select
         date_trunc('week', date_start)::date as week_start,
         adset_name as audience,
@@ -1744,10 +1671,9 @@ weekly_crm as (
         count(*) as facebook_leads
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1, 2
 ),
 joined as (
@@ -1783,15 +1709,7 @@ order by week_start, audience
 />
 
 ```sql creative_type_cpl_weekly
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-weekly_meta as (
+with weekly_meta as (
     select
         date_trunc('week', date_start)::date as week_start,
         case
@@ -1816,10 +1734,9 @@ weekly_crm as (
         count(*) as facebook_leads
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1, 2
 ),
 joined as (
@@ -1856,15 +1773,7 @@ order by week_start, creative_type
 
 
 ```sql audience_spend_leads_scatter
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-by_audience as (
+with by_audience as (
     select
         adset_name as audience,
         sum(spend) as spend,
@@ -1894,10 +1803,9 @@ crm as (
         count(*) as facebook_leads
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1
 )
 select
@@ -1922,15 +1830,7 @@ order by spend desc
 />
 
 ```sql spend_efficiency_weekly
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-weekly_meta as (
+with weekly_meta as (
     select
         date_trunc('week', date_start)::date as week_start,
         adset_name as audience,
@@ -1961,10 +1861,9 @@ weekly_crm as (
         count(*) as facebook_leads
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1, 2
 ),
 joined as (
@@ -2093,15 +1992,7 @@ order by report_date
 />
 
 ```sql device_funnel_over_time
-with spend_bounds as (
-    select
-        min(date_start) as spend_start,
-        max(date_start) as spend_end
-    from meta_ads.daily_adset_insights
-    where date_start >= '${inputs.date_range.start}'
-      and date_start <= '${inputs.date_range.end}'
-),
-meta_daily as (
+with meta_daily as (
     select
         date_start as report_date,
         case lower(impression_device)
@@ -2128,10 +2019,9 @@ crm_daily as (
         count(*) as facebook_leads
     from ghl._lead_records lr
     join ghl.contacts c on c.id = lr.contact_id
-    cross join spend_bounds b
     where lr.channel = 'Facebook Ads'
-      and lr.lead_date >= greatest(b.spend_start, cast('${inputs.date_range.start}' as date))
-      and lr.lead_date <= least(b.spend_end, cast('${inputs.date_range.end}' as date))
+      and lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
     group by 1, 2
 ),
 meta_labeled as (
