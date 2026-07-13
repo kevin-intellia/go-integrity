@@ -10,6 +10,7 @@
 	export let data = undefined;
 
 	const ALL_LEADS = 'All leads';
+	const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 	let loaded = undefined;
 	let unsub = () => {};
@@ -32,37 +33,58 @@
 		return Query.isQuery(rows) ? Array.from(rows) : rows;
 	}
 
+	function isoDate(value) {
+		return String(value).slice(0, 10);
+	}
+
+	function labelForDate(value) {
+		const iso = isoDate(value);
+		const [, month, day] = iso.split('-');
+		return `${monthNames[Number(month) - 1]} ${day}`;
+	}
+
+	function sortByLeadDate(rows) {
+		return [...rows].sort((a, b) => isoDate(a.lead_date).localeCompare(isoDate(b.lead_date)));
+	}
+
+	function normalizeRow(row, channel = row.channel) {
+		const lead_date = isoDate(row.lead_date);
+		return {
+			lead_date,
+			lead_date_label: labelForDate(lead_date),
+			channel,
+			daily_leads: Number(row.daily_leads) || 0
+		};
+	}
+
 	function channelTotals(rows) {
 		const totals = new Map();
 		for (const row of rows) {
+			if (row.channel === ALL_LEADS) continue;
 			const current = totals.get(row.channel) ?? 0;
 			totals.set(row.channel, current + (Number(row.daily_leads) || 0));
 		}
 		return totals;
 	}
 
-	function sortByLeadDate(rows) {
-		return [...rows].sort((a, b) => String(a.lead_date).localeCompare(String(b.lead_date)));
-	}
-
-	$: allRows = rowsFrom(loaded);
-	$: totalsByChannel = channelTotals(allRows);
-	$: totalLeadsInRange = [...totalsByChannel.values()].reduce((sum, value) => sum + value, 0);
+	$: rawRows = rowsFrom(loaded).filter((row) => row.channel !== ALL_LEADS);
+	$: normalizedRows = rawRows.map((row) => normalizeRow(row));
+	$: totalsByChannel = channelTotals(normalizedRows);
 	$: allLeadsRows = (() => {
 		const byDate = new Map();
-		for (const row of allRows) {
-			const dateKey = String(row.lead_date).slice(0, 10);
-			const current = byDate.get(dateKey) ?? {
-				lead_date: dateKey,
+		for (const row of normalizedRows) {
+			const current = byDate.get(row.lead_date) ?? {
+				lead_date: row.lead_date,
 				lead_date_label: row.lead_date_label,
 				channel: ALL_LEADS,
 				daily_leads: 0
 			};
-			current.daily_leads += Number(row.daily_leads) || 0;
-			byDate.set(dateKey, current);
+			current.daily_leads += row.daily_leads;
+			byDate.set(row.lead_date, current);
 		}
 		return sortByLeadDate([...byDate.values()]);
 	})();
+	$: totalLeadsInRange = allLeadsRows.reduce((sum, row) => sum + row.daily_leads, 0);
 	$: availableChannels = [ALL_LEADS, ...[...totalsByChannel.entries()]
 		.sort((a, b) => b[1] - a[1])
 		.map(([channel]) => channel)];
@@ -71,11 +93,10 @@
 		selectedChannel = ALL_LEADS;
 	}
 
-	$: filteredRows = sortByLeadDate(
+	$: filteredRows =
 		selectedChannel === ALL_LEADS
 			? allLeadsRows
-			: allRows.filter((row) => row.channel === selectedChannel)
-	);
+			: sortByLeadDate(normalizedRows.filter((row) => row.channel === selectedChannel));
 
 	$: leadsInRange =
 		selectedChannel === ALL_LEADS
@@ -87,7 +108,7 @@
 	<p class="text-sm text-negative">{loaded.error.message}</p>
 {:else if Query.isQuery(loaded) && !loaded.dataLoaded}
 	<div class="mb-8 h-44 animate-pulse rounded-lg bg-base-200"></div>
-{:else if allRows.length}
+{:else if normalizedRows.length}
 	<div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-base-content/20 bg-base-100 p-4">
 		<label class="flex flex-wrap items-center gap-2 text-sm">
 			<span class="font-medium">Channel</span>
@@ -108,10 +129,9 @@
 	<LineChart
 		data={filteredRows}
 		title="Daily leads by channel"
-		x=lead_date
+		x=lead_date_label
 		y=daily_leads
-		sort=true
-		xFmt='mmm dd'
+		sort=false
 		yFmt='#,##0'
 		legend=false
 	/>
