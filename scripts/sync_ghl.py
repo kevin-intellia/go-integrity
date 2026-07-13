@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 import duckdb
@@ -83,6 +84,42 @@ def api_headers(token: str) -> dict[str, str]:
     }
 
 
+RETRYABLE_STATUS_CODES = {400, 429, 500, 502, 503, 504}
+RETRY_DELAYS_SECONDS = (1, 2, 4)
+
+
+def request_with_retries(method: str, url: str, **kwargs) -> requests.Response:
+    last_error: requests.RequestException | None = None
+
+    for attempt, delay in enumerate((*RETRY_DELAYS_SECONDS, None)):
+        try:
+            response = requests.request(method, url, **kwargs)
+            if response.status_code in RETRYABLE_STATUS_CODES and delay is not None:
+                print(
+                    f"GHL request retry {attempt + 1}/{len(RETRY_DELAYS_SECONDS)} "
+                    f"after HTTP {response.status_code} for {url}",
+                    file=sys.stderr,
+                )
+                time.sleep(delay)
+                continue
+            response.raise_for_status()
+            return response
+        except requests.RequestException as error:
+            last_error = error
+            if delay is None:
+                raise
+            print(
+                f"GHL request retry {attempt + 1}/{len(RETRY_DELAYS_SECONDS)} "
+                f"after error: {error}",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+
+    if last_error:
+        raise last_error
+    raise RuntimeError(f"GHL request failed for {url}")
+
+
 def first_attribution(record: dict) -> dict:
     attributions = record.get("attributions") or []
     return attributions[0] if attributions else {}
@@ -129,17 +166,22 @@ def fetch_contacts(token: str, location_id: str) -> list[dict]:
         "limit": PAGE_SIZE,
     }
     rows: list[dict] = []
+    expected_total: int | None = None
 
     while True:
-        response = requests.get(
+        response = request_with_retries(
+            "GET",
             f"{BASE_URL}/contacts/",
             headers=headers,
             params=params,
             timeout=120,
         )
-        response.raise_for_status()
         payload = response.json()
         contacts = payload.get("contacts") or []
+        meta = payload.get("meta") or {}
+
+        if expected_total is None:
+            expected_total = int(meta.get("total") or 0) or None
 
         for contact in contacts:
             utm = attribution_fields(contact)
@@ -161,16 +203,22 @@ def fetch_contacts(token: str, location_id: str) -> list[dict]:
                 }
             )
 
-        meta = payload.get("meta") or {}
-        if not meta.get("nextPageUrl"):
+        if expected_total is not None and len(rows) >= expected_total:
+            break
+        if not contacts or not meta.get("nextPageUrl"):
             break
 
         params = {
             "locationId": location_id,
             "limit": PAGE_SIZE,
-            "startAfter": meta["startAfter"],
+            "startAfter": int(meta["startAfter"]),
             "startAfterId": meta["startAfterId"],
         }
+
+    if expected_total is not None and len(rows) < expected_total:
+        raise RuntimeError(
+            f"GHL contacts sync incomplete: fetched {len(rows)} of {expected_total}"
+        )
 
     return rows
 
@@ -180,17 +228,21 @@ def fetch_opportunities(token: str, location_id: str) -> list[dict]:
     rows: list[dict] = []
     page = 1
 
+    expected_total: int | None = None
+
     while True:
-        response = requests.post(
+        response = request_with_retries(
+            "POST",
             f"{BASE_URL}/opportunities/search",
             headers=headers,
             json={"locationId": location_id, "limit": PAGE_SIZE, "page": page},
             timeout=120,
         )
-        response.raise_for_status()
         payload = response.json()
         opportunities = payload.get("opportunities") or []
         total = int(payload.get("total") or 0)
+        if expected_total is None:
+            expected_total = total or None
 
         for opp in opportunities:
             utm = attribution_fields(opp)
@@ -215,6 +267,11 @@ def fetch_opportunities(token: str, location_id: str) -> list[dict]:
         if not opportunities or page * PAGE_SIZE >= total:
             break
         page += 1
+
+    if expected_total is not None and len(rows) < expected_total:
+        raise RuntimeError(
+            f"GHL opportunities sync incomplete: fetched {len(rows)} of {expected_total}"
+        )
 
     return rows
 
