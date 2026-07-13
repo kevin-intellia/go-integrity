@@ -34,7 +34,17 @@
 	}
 
 	function isoDate(value) {
-		return String(value).slice(0, 10);
+		if (value instanceof Date && !Number.isNaN(value.getTime())) {
+			const y = value.getFullYear();
+			const m = String(value.getMonth() + 1).padStart(2, '0');
+			const d = String(value.getDate()).padStart(2, '0');
+			return `${y}-${m}-${d}`;
+		}
+		const str = String(value);
+		if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+			return str.slice(0, 10);
+		}
+		return str.slice(0, 10);
 	}
 
 	function labelForDate(value) {
@@ -51,7 +61,7 @@
 		const lead_date = isoDate(row.lead_date);
 		return {
 			lead_date,
-			lead_date_label: labelForDate(lead_date),
+			lead_date_label: row.lead_date_label ?? labelForDate(lead_date),
 			channel,
 			daily_leads: Number(row.daily_leads) || 0
 		};

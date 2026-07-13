@@ -57,6 +57,56 @@ where lr.lead_date >= '${inputs.date_range.start}'
 
 <CrmMetricBlocks data={crm_totals} />
 
+### Showings over time
+
+```sql appointments_total_over_time
+with daily as (
+    select
+        lr.lead_date,
+        sum(
+            case when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c' then 1 else 0 end
+        ) as daily_appointments
+    from ghl._lead_records lr
+    join ghl.opportunities o on o.id = lr.opportunity_id
+    where lr.lead_date >= '${inputs.date_range.start}'
+      and lr.lead_date <= '${inputs.date_range.end}'
+    group by 1
+),
+date_span as (
+    select unnest(
+        generate_series(
+            cast('${inputs.date_range.start}' as date),
+            cast('${inputs.date_range.end}' as date),
+            interval 1 day
+        )
+    )::date as lead_date
+),
+filled as (
+    select
+        d.lead_date,
+        coalesce(daily.daily_appointments, 0) as daily_appointments
+    from date_span d
+    left join daily on d.lead_date = daily.lead_date
+)
+select
+    lead_date,
+    strftime(lead_date, '%b %d') as lead_date_label,
+    sum(daily_appointments) over (
+        order by lead_date
+        rows between unbounded preceding and current row
+    ) as cumulative_appointments
+from filled
+order by lead_date
+```
+
+<LineChart
+    data={appointments_total_over_time}
+    title="Cumulative showings requested (all channels)"
+    x=lead_date_label
+    y=cumulative_appointments
+    sort=false
+/>
+
 ### Leads over time
 
 ```sql all_leads_cumulative
@@ -202,55 +252,6 @@ order by channel, lead_date
 ```
 
 <DailyLeadsByChannelChart data={all_leads_daily} />
-
-
-```sql appointments_total_over_time
-with daily as (
-    select
-        lr.lead_date,
-        sum(
-            case when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c' then 1 else 0 end
-        ) as daily_appointments
-    from ghl._lead_records lr
-    join ghl.opportunities o on o.id = lr.opportunity_id
-    where lr.lead_date >= '${inputs.date_range.start}'
-      and lr.lead_date <= '${inputs.date_range.end}'
-    group by 1
-),
-date_span as (
-    select unnest(
-        generate_series(
-            cast('${inputs.date_range.start}' as date),
-            cast('${inputs.date_range.end}' as date),
-            interval 1 day
-        )
-    )::date as lead_date
-),
-filled as (
-    select
-        d.lead_date,
-        coalesce(daily.daily_appointments, 0) as daily_appointments
-    from date_span d
-    left join daily on d.lead_date = daily.lead_date
-)
-select
-    lead_date,
-    strftime(lead_date, '%b %d') as lead_date_label,
-    sum(daily_appointments) over (
-        order by lead_date
-        rows between unbounded preceding and current row
-    ) as cumulative_appointments
-from filled
-order by lead_date
-```
-
-<LineChart
-    data={appointments_total_over_time}
-    title="Cumulative showings requested (all channels)"
-    x=lead_date_label
-    y=cumulative_appointments
-    sort=false
-/>
 
 ### Lead volume by channel
 
