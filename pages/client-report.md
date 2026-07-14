@@ -29,7 +29,7 @@ All leads and outcomes across every channel.
 ```sql crm_totals
 select
     count(*) as total_leads,
-    sum(case when channel = 'Facebook Ads' then 1 else 0 end) as facebook_ad_leads
+    sum(case when channel = 'Facebook' then 1 else 0 end) as facebook_ad_leads
 from ghl._lead_records
 where lead_date >= '${inputs.date_range.start}'
   and lead_date <= '${inputs.date_range.end}'
@@ -168,7 +168,7 @@ with meta as (
 ),
 crm as (
     select
-        sum(case when channel = 'Facebook Ads' then 1 else 0 end) as facebook_ad_leads
+        sum(case when channel = 'Facebook' then 1 else 0 end) as facebook_ad_leads
     from ghl._lead_records
     where lead_date >= '${inputs.date_range.start}'
       and lead_date <= '${inputs.date_range.end}'
@@ -189,7 +189,7 @@ with daily as (
         lead_date,
         count(*) as daily_leads
     from ghl._lead_records
-    where channel = 'Facebook Ads'
+    where channel = 'Facebook'
       and lead_date >= '${inputs.date_range.start}'
       and lead_date <= '${inputs.date_range.end}'
     group by 1
