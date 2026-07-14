@@ -3,7 +3,7 @@ select
     (
         select count(*)
         from lead_records
-        where channel = 'Facebook Ads'
+        where channel = 'Facebook'
     ) as facebook_ad_leads,
     sum(
         case when o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c' then 1 else 0 end

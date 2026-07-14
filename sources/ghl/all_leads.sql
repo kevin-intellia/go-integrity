@@ -20,7 +20,7 @@ select
         else coalesce(o.status, 'Unknown')
     end as pipeline_stage,
     case
-        when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 'Facebook Ads'
+        when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 'Facebook'
         when c.utm_medium = 'email' or c.utm_source ilike '%email%' then 'Email'
         when c.utm_medium = 'print' then 'Print'
         when o.source in ('Integrity Website Inquires', 'Integrity Website Inquiries') then 'Integrity Website'

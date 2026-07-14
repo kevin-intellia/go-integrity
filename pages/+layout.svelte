@@ -14,7 +14,7 @@
 
 	const productionHome =
 		import.meta.env.PUBLIC_DEPLOY_TARGET === 'internal' ? '/meta-ads/' : '/client-report/';
-	const homeHref = addBasePath(dev ? '/meta-ads/' : productionHome);
+	const homeHref = addBasePath(dev ? '/' : productionHome);
 	const logoHref = homeHref;
 
 	function isRootPath(pathname) {
@@ -25,6 +25,9 @@
 
 	function redirectHomeToDefaultReport() {
 		if (!browser || !isRootPath($page.url.pathname)) return;
+		const target = homeHref.replace(/\/$/, '') || '/';
+		const current = $page.url.pathname.replace(/\/$/, '') || '/';
+		if (target === current) return;
 		goto(homeHref, { replaceState: true });
 	}
 

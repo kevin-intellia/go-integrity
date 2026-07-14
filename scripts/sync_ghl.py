@@ -304,7 +304,7 @@ select
     c.utm_medium,
     c.session_source,
     case
-        when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 'Facebook Ads'
+        when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 'Facebook'
         when c.utm_medium = 'email' or c.utm_source ilike '%email%' then 'Email'
         when c.utm_medium = 'print' then 'Print'
         when o.source in ('Integrity Website Inquires', 'Integrity Website Inquiries') then 'Integrity Website'
@@ -324,6 +324,12 @@ select
     end as channel
 from opportunities o
 join contacts c on c.id = o.contact_id
+where not (
+    lower(coalesce(c.email, '')) in ('test@test.com', 'test@gmail.com')
+    or lower(coalesce(c.email, '')) like '%intelliadigital.com'
+    or lower(trim(coalesce(c.first_name, ''))) in ('test', 'test 1')
+    or lower(trim(coalesce(c.last_name, ''))) = 'test'
+)
 """
 
 

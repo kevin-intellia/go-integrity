@@ -16,7 +16,7 @@ select
     c.phone,
     cast(coalesce(c.date_added, o.created_at) as date) as lead_date,
     case
-        when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 'Facebook Ads'
+        when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 'Facebook'
         when c.utm_medium = 'email' or c.utm_source ilike '%email%' then 'Email'
         when c.utm_medium = 'print' then 'Print'
         when o.source in ('Integrity Website Inquires', 'Integrity Website Inquiries') then 'Integrity Website'

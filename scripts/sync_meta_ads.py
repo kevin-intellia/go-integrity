@@ -323,6 +323,7 @@ def main() -> int:
     try:
         campaign_rows = fetch_insights(token, account_id, level="campaign", days=30)
         adset_rows = fetch_insights(token, account_id, level="adset", days=30)
+        ad_rows = fetch_insights(token, account_id, level="ad", days=30)
         device_rows = fetch_insights(
             token,
             account_id,
@@ -333,6 +334,7 @@ def main() -> int:
         )
         write_insights_table("daily_campaign_insights", campaign_rows)
         write_insights_table("daily_adset_insights", adset_rows)
+        write_insights_table("daily_ad_insights", ad_rows)
         write_device_insights_table("daily_adset_insights_by_device", device_rows)
         save_snapshot()
         return 0
