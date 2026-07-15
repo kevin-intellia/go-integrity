@@ -132,38 +132,24 @@ function buildSubmissionRow(contact, index) {
 
 function isControlContact(contact) {
 	const email = (contact.email || '').trim();
+	const source = contact.source || '';
 	if (!email || !isSinceTestStart(contact.dateAdded)) {
 		return false;
 	}
-	return pageUrlFromContact(contact).toLowerCase().includes(CONTROL_MATCH);
+	return CONTROL_SOURCE_PATTERN.test(source);
 }
 
 function isVariationContact(contact) {
 	const email = (contact.email || '').trim();
-	if (!email) {
-		return false;
-	}
-
-	const pageUrl = pageUrlFromContact(contact).toLowerCase();
-	if (pageUrl.includes(CONTROL_MATCH)) {
-		return false;
-	}
-
-	if (pageUrl.includes(VARIATION_MATCH) && isSinceTestStart(contact.dateAdded)) {
-		return true;
-	}
-
-	// Variation funnel (Website Lead) can record root URL without home-184946 in page_url.
 	const source = (contact.source || '').trim();
-	if (source === 'Website Lead') {
-		const onStoweSite =
-			pageUrl.includes('stowelegacyestate.com/home-184946') ||
-			pageUrl === 'https://stowelegacyestate.com/' ||
-			pageUrl.startsWith('https://stowelegacyestate.com/?');
-		return onStoweSite && isSinceTestStart(contact.dateAdded);
+	if (!email || !isSinceTestStart(contact.dateAdded)) {
+		return false;
 	}
-
-	return false;
+	if (source !== VARIATION_SOURCE) {
+		return false;
+	}
+	// Website Lead is used on other sites too; scope to the Stowe A/B test domain.
+	return pageUrlFromContact(contact).toLowerCase().includes(STOWE_SITE);
 }
 
 function filterArmContacts(contacts, arm) {
