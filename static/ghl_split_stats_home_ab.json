@@ -1,0 +1,7 @@
+{
+  "views": { "control": 489, "variation": 499 },
+  "optins": { "control": 9, "variation": 6 },
+  "source": "GHL split test UI",
+  "updated_at": "2026-07-15T14:24:00-04:00",
+  "notes": "Page views and form submission totals from GHL split test UI. Each form submission = one Submit click (repeat submits count separately)."
+}

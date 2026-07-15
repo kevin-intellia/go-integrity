@@ -12,6 +12,7 @@ import duckdb
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "reports" / "home-ab-test.html"
 OUT_STATIC = ROOT / "static" / "home-ab-test.html"
+GHL_STATS_STATIC = ROOT / "static" / "ghl_split_stats_home_ab.json"
 SUBMISSIONS_CONFIG = ROOT / "config" / "form_submissions_home_ab.json"
 GHL_STATS_CONFIG = ROOT / "config" / "ghl_split_stats_home_ab.json"
 GHL_DB = ROOT / "sources" / "ghl" / "ghl.duckdb"
@@ -426,6 +427,44 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       transform: translateX(18px);
     }}
     .toggle-label strong {{ color: var(--text); }}
+    .reload-wrap {{
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.55rem 0.85rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }}
+    .reload-btn {{
+      appearance: none;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+    }}
+    .reload-btn:hover:not(:disabled) {{
+      background: rgba(91,141,239,0.18);
+      border-color: rgba(91,141,239,0.45);
+    }}
+    .reload-btn:disabled {{
+      opacity: 0.55;
+      cursor: not-allowed;
+    }}
+    .reload-status {{
+      font-size: 0.8rem;
+      color: var(--muted);
+    }}
+    .reload-status.error {{
+      color: #f08080;
+    }}
   </style>
 </head>
 <body>
@@ -500,6 +539,10 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
         <span class="toggle-thumb"></span>
       </label>
       <span class="toggle-label"><strong>Remove duplicates</strong> · show unique people only in tables</span>
+    </div>
+    <div class="reload-wrap">
+      <button type="button" class="reload-btn" id="reloadData">Reload data</button>
+      <span class="reload-status" id="lastUpdated">Last updated: {data.get("ghl", {}).get("updated_at") or updated}</span>
     </div>
   </div>
 
@@ -602,8 +645,58 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
         `Variation — form submissions (${{varVisible}})`;
     }}
 
+    function formatUpdatedAt(value) {{
+      if (!value) return '—';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return String(value);
+      return d.toLocaleString('en-US', {{
+        timeZone: 'America/New_York',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      }}) + ' EDT';
+    }}
+
+    function setReloadStatus(message, isError) {{
+      const el = document.getElementById('lastUpdated');
+      el.textContent = message;
+      el.classList.toggle('error', Boolean(isError));
+    }}
+
+    async function reloadData() {{
+      const btn = document.getElementById('reloadData');
+      btn.disabled = true;
+      setReloadStatus('Loading…', false);
+
+      try {{
+        const response = await fetch('/api/ab-test-data', {{ cache: 'no-store' }});
+        const payload = await response.json().catch(() => ({{}}));
+
+        if (!response.ok || !payload.ok) {{
+          const detail = payload.error || `Request failed (${{response.status}})`;
+          if (response.status === 404) {{
+            throw new Error('Live reload available on deployed internal site');
+          }}
+          throw new Error(detail);
+        }}
+
+        DATA.control_submissions = payload.control_submissions;
+        DATA.variation_submissions = payload.variation_submissions;
+        DATA.ghl = payload.ghl;
+        render(document.getElementById('removeDupes').checked);
+        setReloadStatus('Last updated: ' + formatUpdatedAt(payload.updated_at), false);
+      }} catch (error) {{
+        const message = error instanceof Error ? error.message : 'Reload failed';
+        setReloadStatus(message, true);
+      }} finally {{
+        btn.disabled = false;
+      }}
+    }}
+
     const toggle = document.getElementById('removeDupes');
     toggle.addEventListener('change', () => render(toggle.checked));
+    document.getElementById('reloadData').addEventListener('click', reloadData);
     render(true);
   </script>
 </body>
@@ -628,6 +721,7 @@ def main() -> None:
     OUT.write_text(build_html(data, embedded=False))
     OUT_STATIC.parent.mkdir(parents=True, exist_ok=True)
     OUT_STATIC.write_text(build_html(data, embedded=True))
+    GHL_STATS_STATIC.write_text(GHL_STATS_CONFIG.read_text())
     print(f"Wrote {OUT}")
     print(f"Wrote {OUT_STATIC}")
     print(f"  GHL form submissions: control {ghl_stats['optins']['control']}, variation {ghl_stats['optins']['variation']}")

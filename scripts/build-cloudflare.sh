@@ -35,6 +35,8 @@ echo "Preparing deploy target: $DEPLOY_TARGET"
 bash scripts/prepare-deploy-target.sh "$DEPLOY_TARGET"
 
 if [ "$DEPLOY_TARGET" = "internal" ]; then
+	echo "Copying GHL split stats for A/B test..."
+	cp config/ghl_split_stats_home_ab.json static/ghl_split_stats_home_ab.json
 	echo "Building Page 1 A/B test report (internal only)..."
 	python3 scripts/build_ab_test_viz.py
 fi
