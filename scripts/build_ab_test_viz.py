@@ -630,7 +630,7 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
   <div class="modal-backdrop" id="updateModal" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="updateModalTitle">
       <h2 id="updateModalTitle">Update A/B data</h2>
-      <p>Copy page views from GHL → Sites → Funnel → Page 1 split test → Stats. Submissions reload automatically from CRM.</p>
+      <p>Copy page views from GHL → Sites → Funnel → Page 1 split test → Stats. Saved for everyone on the team. Submissions reload from CRM.</p>
       <div class="modal-fields">
         <label>
           <strong>A · Control page views</strong>
@@ -667,7 +667,6 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
 
   <script>
     const DATA = {payload};
-    const VIEWS_STORAGE_KEY = 'home_ab_page_views';
     const SUBMISSIONS_STORAGE_KEY = 'home_ab_submissions';
 
     function loadCachedSubmissions() {{
@@ -681,6 +680,9 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
         if (cached.ghl?.optins) {{
           DATA.ghl.optins = cached.ghl.optins;
         }}
+        if (cached.ghl?.views) {{
+          DATA.ghl.views = cached.ghl.views;
+        }}
         return true;
       }} catch {{
         return false;
@@ -693,7 +695,10 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
         JSON.stringify({{
           control_submissions: payload.control_submissions,
           variation_submissions: payload.variation_submissions,
-          ghl: {{ optins: payload.ghl?.optins }},
+          ghl: {{
+            optins: payload.ghl?.optins,
+            views: payload.ghl?.views
+          }},
           updated_at: payload.updated_at || new Date().toISOString()
         }})
       );
@@ -702,33 +707,17 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
     function applyPayload(payload) {{
       DATA.control_submissions = payload.control_submissions;
       DATA.variation_submissions = payload.variation_submissions;
-      if (payload.ghl?.optins) {{
-        DATA.ghl.optins = payload.ghl.optins;
+      if (payload.ghl) {{
+        DATA.ghl = {{ ...DATA.ghl, ...payload.ghl }};
       }}
       saveCachedSubmissions(payload);
     }}
 
     function getActiveViews() {{
-      try {{
-        const saved = JSON.parse(localStorage.getItem(VIEWS_STORAGE_KEY) || 'null');
-        if (saved?.control != null && saved?.variation != null) {{
-          return {{
-            control: Number(saved.control) || 0,
-            variation: Number(saved.variation) || 0
-          }};
-        }}
-      }} catch {{}}
       return {{
         control: Number(DATA.ghl?.views?.control) || 0,
         variation: Number(DATA.ghl?.views?.variation) || 0
       }};
-    }}
-
-    function saveViews(control, variation) {{
-      localStorage.setItem(
-        VIEWS_STORAGE_KEY,
-        JSON.stringify({{ control, variation, updated_at: new Date().toISOString() }})
-      );
     }}
 
     function openUpdateModal() {{
@@ -864,11 +853,15 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       }}
 
       try {{
+        const method = viewsOverride ? 'POST' : 'GET';
+        const init = {{ cache: 'no-store' }};
         if (viewsOverride) {{
-          saveViews(viewsOverride.control, viewsOverride.variation);
+          init.method = 'POST';
+          init.headers = {{ 'Content-Type': 'application/json' }};
+          init.body = JSON.stringify({{ views: viewsOverride }});
         }}
 
-        const response = await fetch('/api/ab-test-data', {{ cache: 'no-store' }});
+        const response = await fetch('/api/ab-test-data', init);
         const payload = await response.json().catch(() => ({{}}));
 
         if (!response.ok || !payload.ok) {{

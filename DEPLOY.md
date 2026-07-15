@@ -64,7 +64,22 @@ Add the same **Build** secrets to **both** projects (Settings → Build → Vari
 
 Use **Encrypt** (Secret) for each. After saving, **Retry deployment**.
 
-## 5. Optional: Refresh button
+## 5. Internal A/B page views (KV)
+
+The Page 1 A/B dashboard stores **shared page views** in Cloudflare KV so one update applies for the whole team.
+
+On the **internal** project only:
+
+1. **Workers & Pages → KV → Create a namespace** (e.g. `go-integrity-ab-test`)
+2. **Internal Pages project → Settings → Functions → KV namespace bindings**
+3. Add binding:
+   - **Variable name:** `AB_TEST_KV`
+   - **KV namespace:** the namespace you created
+4. **Retry deployment**
+
+Until KV is bound, page views fall back to the static JSON from deploy. Saving new views via **Update data** requires the KV binding.
+
+## 6. Optional: Refresh button
 
 Per project:
 
@@ -76,7 +91,7 @@ Per project:
 | `DEPLOY_HOOK_URL` | That project's deploy hook URL |
 | `REFRESH_PASSWORD` | Optional |
 
-## 6. Custom domains (optional)
+## 7. Custom domains (optional)
 
 - Client project → e.g. `reports.yourdomain.com`
 - Internal project → e.g. `analytics.yourdomain.com` (or skip and use the `*.pages.dev` URL)

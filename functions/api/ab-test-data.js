@@ -5,6 +5,7 @@ const TEST_START_UTC = '2026-07-15T15:19:56';
 const CONTROL_SOURCE_PATTERN = /vt-optin/i;
 const VARIATION_SOURCE = 'Website Lead';
 const STOWE_SITE = 'stowelegacyestate.com';
+const KV_VIEWS_KEY = 'home_ab_page_views';
 const RETRYABLE_STATUS_CODES = new Set([400, 429, 500, 502, 503, 504]);
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
@@ -148,7 +149,6 @@ function isVariationContact(contact) {
 	if (source !== VARIATION_SOURCE) {
 		return false;
 	}
-	// Website Lead is used on other sites too; scope to the Stowe A/B test domain.
 	return pageUrlFromContact(contact).toLowerCase().includes(STOWE_SITE);
 }
 
@@ -203,8 +203,37 @@ async function loadStaticJson(request, filename) {
 	}
 }
 
-async function loadGhlStats(request) {
-	return loadStaticJson(request, 'ghl_split_stats_home_ab.json');
+async function loadSharedViews(env) {
+	if (!env.AB_TEST_KV) {
+		return null;
+	}
+	const raw = await env.AB_TEST_KV.get(KV_VIEWS_KEY);
+	if (!raw) {
+		return null;
+	}
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return null;
+	}
+}
+
+async function saveSharedViews(env, views) {
+	if (!env.AB_TEST_KV) {
+		throw new Error(
+			'Shared page view storage is not configured. Add AB_TEST_KV KV binding on the internal Cloudflare project.'
+		);
+	}
+	const payload = {
+		views: {
+			control: Number(views.control) || 0,
+			variation: Number(views.variation) || 0
+		},
+		updated_at: new Date().toISOString(),
+		source: 'GHL split test UI'
+	};
+	await env.AB_TEST_KV.put(KV_VIEWS_KEY, JSON.stringify(payload));
+	return payload;
 }
 
 function rowFromManual(entry, formName) {
@@ -251,81 +280,72 @@ function mergeManualRows(apiRows, manualEntries, formName) {
 	return out.sort((a, b) => new Date(a.time || 0).getTime() - new Date(b.time || 0).getTime());
 }
 
-function statsFromRows(controlRows, variationRows, statsJson) {
-	if (statsJson?.views && statsJson?.optins) {
-		return {
-			views: {
-				control: Number(statsJson.views.control) || 0,
-				variation: Number(statsJson.views.variation) || 0
-			},
-			optins: {
-				control: Number(statsJson.optins.control) || 0,
-				variation: Number(statsJson.optins.variation) || 0
-			},
-			updated_at: statsJson.updated_at || '',
-			notes: statsJson.notes || ''
-		};
-	}
+async function buildGhlStats(env, request, controlRows, variationRows) {
+	const sharedViews = await loadSharedViews(env);
+	const staticStats = (await loadStaticJson(request, 'ghl_split_stats_home_ab.json')) || {};
+	const viewsSource = sharedViews?.views ? sharedViews : staticStats;
 
 	return {
-		views: { control: 0, variation: 0 },
-		optins: {
-			control: controlRows.length,
-			variation: variationRows.length
+		views: {
+			control: Number(viewsSource?.views?.control) || 0,
+			variation: Number(viewsSource?.views?.variation) || 0
 		},
-		updated_at: '',
-		notes: ''
+		optins: {
+			control: Number(staticStats?.optins?.control) || controlRows.length,
+			variation: Number(staticStats?.optins?.variation) || variationRows.length
+		},
+		updated_at: sharedViews?.updated_at || staticStats.updated_at || '',
+		views_source: sharedViews?.views ? 'shared' : 'static',
+		notes: staticStats.notes || ''
 	};
 }
 
-export async function onRequestGet({ env, request }) {
+async function buildAbTestPayload(env, request) {
 	const token = env.GHL_PRIVATE_INTEGRATION_TOKEN;
 	const locationId = (env.GHL_LOCATION_ID || '').trim();
 
 	if (!token || !locationId) {
-		return Response.json(
-			{ ok: false, error: 'GHL credentials are not configured on this deployment' },
-			{ status: 500 }
-		);
+		throw new Error('GHL credentials are not configured on this deployment');
 	}
 
+	const contacts = await fetchAllContacts(token, locationId);
+	const formConfig = (await loadStaticJson(request, 'form_submissions_home_ab.json')) || {};
+
+	const controlRaw = filterArmContacts(contacts, 'control').map((contact, index) =>
+		buildSubmissionRow(contact, index + 1)
+	);
+	const variationRaw = filterArmContacts(contacts, 'variation').map((contact, index) =>
+		buildSubmissionRow(contact, index + 1)
+	);
+
+	const controlMerged = mergeManualRows(
+		controlRaw,
+		formConfig.control_submissions,
+		formConfig.control_form_name || 'Control form'
+	);
+	const variationMerged = mergeManualRows(
+		variationRaw,
+		formConfig.variation_submissions,
+		formConfig.variation_form_name || 'Funnel Leads'
+	);
+
+	const controlMarked = markDuplicates(controlMerged);
+	const variationMarked = markDuplicates(variationMerged);
+	const ghl = await buildGhlStats(env, request, controlMarked, variationMarked);
+
+	return {
+		ok: true,
+		updated_at: new Date().toISOString(),
+		control_submissions: padToGhlCount(controlMarked, ghl.optins.control),
+		variation_submissions: padToGhlCount(variationMarked, ghl.optins.variation),
+		ghl
+	};
+}
+
+export async function onRequestGet({ env, request }) {
 	try {
-		const contacts = await fetchAllContacts(token, locationId);
-		const formConfig = (await loadStaticJson(request, 'form_submissions_home_ab.json')) || {};
-
-		const controlRaw = filterArmContacts(contacts, 'control').map((contact, index) =>
-			buildSubmissionRow(contact, index + 1)
-		);
-		const variationRaw = filterArmContacts(contacts, 'variation').map((contact, index) =>
-			buildSubmissionRow(contact, index + 1)
-		);
-
-		const controlMerged = mergeManualRows(
-			controlRaw,
-			formConfig.control_submissions,
-			formConfig.control_form_name || 'Control form'
-		);
-		const variationMerged = mergeManualRows(
-			variationRaw,
-			formConfig.variation_submissions,
-			formConfig.variation_form_name || 'Funnel Leads'
-		);
-
-		const controlMarked = markDuplicates(controlMerged);
-		const variationMarked = markDuplicates(variationMerged);
-		const statsJson = await loadGhlStats(request);
-		const ghl = statsFromRows(controlMarked, variationMarked, statsJson);
-
-		const control_submissions = padToGhlCount(controlMarked, ghl.optins.control);
-		const variation_submissions = padToGhlCount(variationMarked, ghl.optins.variation);
-
-		return Response.json({
-			ok: true,
-			updated_at: new Date().toISOString(),
-			control_submissions,
-			variation_submissions,
-			ghl
-		});
+		const payload = await buildAbTestPayload(env, request);
+		return Response.json(payload);
 	} catch (error) {
 		return Response.json(
 			{
@@ -333,6 +353,35 @@ export async function onRequestGet({ env, request }) {
 				error: error instanceof Error ? error.message : 'Failed to load A/B test data'
 			},
 			{ status: 502 }
+		);
+	}
+}
+
+export async function onRequestPost({ env, request }) {
+	let body = {};
+	try {
+		body = await request.json();
+	} catch {
+		return Response.json({ ok: false, error: 'Invalid JSON body' }, { status: 400 });
+	}
+
+	const control = Number(body?.views?.control);
+	const variation = Number(body?.views?.variation);
+	if (!Number.isFinite(control) || !Number.isFinite(variation) || control < 0 || variation < 0) {
+		return Response.json({ ok: false, error: 'Invalid page view counts' }, { status: 400 });
+	}
+
+	try {
+		await saveSharedViews(env, { control, variation });
+		const payload = await buildAbTestPayload(env, request);
+		return Response.json(payload);
+	} catch (error) {
+		return Response.json(
+			{
+				ok: false,
+				error: error instanceof Error ? error.message : 'Failed to save page views'
+			},
+			{ status: 500 }
 		);
 	}
 }
