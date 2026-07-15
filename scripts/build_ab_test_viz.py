@@ -466,6 +466,33 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
     .reload-status.error {{
       color: #f08080;
     }}
+    .views-wrap {{
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.55rem 0.85rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }}
+    .views-wrap strong {{ color: var(--text); }}
+    .views-wrap label {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }}
+    .views-wrap input {{
+      width: 5.5rem;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 0.25rem 0.45rem;
+      font-size: 0.82rem;
+    }}
   </style>
 </head>
 <body>
@@ -541,9 +568,15 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       </label>
       <span class="toggle-label"><strong>Remove duplicates</strong> · show unique people only in tables</span>
     </div>
+    <div class="views-wrap">
+      <span><strong>Page views</strong> · paste from GHL split test UI</span>
+      <label>A <input type="number" id="viewsControlInput" min="0" step="1" /></label>
+      <label>B <input type="number" id="viewsVariationInput" min="0" step="1" /></label>
+      <button type="button" class="reload-btn" id="applyViews">Apply views</button>
+    </div>
     <div class="reload-wrap">
-      <button type="button" class="reload-btn" id="reloadData">Reload data</button>
-      <span class="reload-status" id="lastUpdated">Last updated: {data.get("ghl", {}).get("updated_at") or updated}</span>
+      <button type="button" class="reload-btn" id="reloadData">Reload submissions</button>
+      <span class="reload-status" id="lastUpdated">Submissions: live on reload · Views: from GHL UI above</span>
     </div>
   </div>
 
@@ -566,6 +599,44 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
 
   <script>
     const DATA = {payload};
+    const VIEWS_STORAGE_KEY = 'home_ab_page_views';
+
+    function getActiveViews() {{
+      try {{
+        const saved = JSON.parse(localStorage.getItem(VIEWS_STORAGE_KEY) || 'null');
+        if (saved?.control != null && saved?.variation != null) {{
+          return {{
+            control: Number(saved.control) || 0,
+            variation: Number(saved.variation) || 0
+          }};
+        }}
+      }} catch {{}}
+      return {{
+        control: Number(DATA.ghl?.views?.control) || 0,
+        variation: Number(DATA.ghl?.views?.variation) || 0
+      }};
+    }}
+
+    function syncViewInputs() {{
+      const views = getActiveViews();
+      document.getElementById('viewsControlInput').value = views.control;
+      document.getElementById('viewsVariationInput').value = views.variation;
+    }}
+
+    function applyViews() {{
+      const control = Number(document.getElementById('viewsControlInput').value);
+      const variation = Number(document.getElementById('viewsVariationInput').value);
+      if (!Number.isFinite(control) || !Number.isFinite(variation) || control < 0 || variation < 0) {{
+        setReloadStatus('Enter valid page view counts', true);
+        return;
+      }}
+      localStorage.setItem(
+        VIEWS_STORAGE_KEY,
+        JSON.stringify({{ control, variation, updated_at: new Date().toISOString() }})
+      );
+      render(document.getElementById('removeDupes').checked);
+      setReloadStatus('Page views updated · submissions reload separately', false);
+    }}
 
     function fmtTime(iso) {{
       const d = new Date(iso);
@@ -607,7 +678,7 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
     function render(removeDupes) {{
       const ctrlRows = DATA.control_submissions;
       const varRows = DATA.variation_submissions;
-      const views = DATA.ghl.views;
+      const views = getActiveViews();
 
       const ctrlUnique = countUnique(ctrlRows);
       const varUnique = countUnique(varRows);
@@ -684,9 +755,11 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
 
         DATA.control_submissions = payload.control_submissions;
         DATA.variation_submissions = payload.variation_submissions;
-        DATA.ghl = payload.ghl;
+        if (payload.ghl?.optins) {{
+          DATA.ghl.optins = payload.ghl.optins;
+        }}
         render(document.getElementById('removeDupes').checked);
-        setReloadStatus('Last updated: ' + formatUpdatedAt(payload.updated_at), false);
+        setReloadStatus('Submissions reloaded ' + formatUpdatedAt(payload.updated_at) + ' · update page views from GHL UI above', false);
       }} catch (error) {{
         const message = error instanceof Error ? error.message : 'Reload failed';
         setReloadStatus(message, true);
@@ -698,6 +771,8 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
     const toggle = document.getElementById('removeDupes');
     toggle.addEventListener('change', () => render(toggle.checked));
     document.getElementById('reloadData').addEventListener('click', reloadData);
+    document.getElementById('applyViews').addEventListener('click', applyViews);
+    syncViewInputs();
     render(true);
   </script>
 </body>
