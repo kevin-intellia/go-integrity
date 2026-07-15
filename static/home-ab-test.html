@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Page 1 A/B Split Test</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #2a2f3d;
+      --text: #e8eaef;
+      --muted: #9aa3b2;
+      --control: #5b8def;
+      --control-dim: rgba(91,141,239,0.12);
+      --variation: #4ec9b0;
+      --variation-dim: rgba(78,201,176,0.12);
+      --win: #7dd87d;
+      --tie: #e8b84a;
+      --dupe: #e8b84a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 1rem 1.25rem 1.5rem;
+    }
+    .page-header { margin-bottom: 1.25rem; }
+    h1 { margin: 0 0 0.25rem; font-size: 1.5rem; font-weight: 600; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin: 0; }
+
+    .ab-split {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 0;
+      margin-bottom: 2rem;
+      min-height: 320px;
+    }
+    @media (max-width: 900px) {
+      .ab-split { grid-template-columns: 1fr; }
+      .vs-divider { display: none; }
+    }
+
+    .arm {
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .arm.control { border-top: 4px solid var(--control); }
+    .arm.variation { border-top: 4px solid var(--variation); }
+
+    .arm-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+    .arm-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .arm-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0.15rem 0 0;
+    }
+    .arm.control .arm-title { color: var(--control); }
+    .arm.variation .arm-title { color: var(--variation); }
+    .arm-url {
+      font-family: ui-monospace, monospace;
+      font-size: 0.72rem;
+      word-break: break-all;
+    }
+    .arm-url a {
+      color: inherit;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      max-width: 100%;
+    }
+    .arm-url a:hover {
+      text-decoration: underline;
+    }
+    .arm.control .arm-url a { color: var(--control); }
+    .arm.variation .arm-url a { color: var(--variation); }
+    .arm-url .link-icon {
+      font-size: 0.85em;
+      opacity: 0.75;
+      flex-shrink: 0;
+    }
+
+    .hero-metric {
+      text-align: center;
+      padding: 1rem 0;
+    }
+    .hero-value {
+      font-size: 3.5rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .arm.control .hero-value { color: var(--control); }
+    .arm.variation .hero-value { color: var(--variation); }
+    .hero-label {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 0.35rem;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .stat {
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      padding: 0.75rem;
+      text-align: center;
+    }
+    .stat-val {
+      font-size: 1.5rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-lbl {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.15rem;
+    }
+
+    .vs-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 1rem;
+      color: var(--muted);
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .tables-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 900px) {
+      .tables-section { grid-template-columns: 1fr; }
+    }
+    .table-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+    }
+    .table-card.control { border-top: 3px solid var(--control); }
+    .table-card.variation { border-top: 3px solid var(--variation); }
+    .table-card h2 {
+      margin: 0 0 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .table-card.control h2 { color: var(--control); }
+    .table-card.variation h2 { color: var(--variation); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: fixed; }
+    th, td {
+      text-align: left;
+      padding: 0.45rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      height: 2.25rem;
+      max-width: 0;
+    }
+    th { color: var(--muted); font-weight: 500; font-size: 0.75rem; }
+    td:first-child, th:first-child { width: 2rem; max-width: 2rem; }
+    tr.dupe td { background: rgba(232,184,74,0.08); }
+    td.dupe-flag {
+      color: var(--dupe);
+      font-weight: 600;
+      font-size: 0.65rem;
+      text-align: center;
+    }
+    .tag {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      background: rgba(232,184,74,0.18);
+      color: var(--dupe);
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin: 0 0 1rem;
+    }
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.55rem 0.85rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .toggle {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.1);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle input:checked + .toggle-track {
+      background: rgba(125,216,125,0.35);
+    }
+    .toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      pointer-events: none;
+    }
+    .toggle input:checked ~ .toggle-thumb {
+      transform: translateX(18px);
+    }
+    .toggle-label strong { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <div class="ab-split">
+    <div class="arm control" id="armControl">
+      <div class="arm-head">
+        <div>
+          <div class="arm-label">A · Control</div>
+          <div class="arm-title">Before design</div>
+        </div>
+      </div>
+      <div class="arm-url">
+        <a href="https://stowelegacyestate.com/stowe-auction---main-production-page" target="_blank" rel="noopener noreferrer">
+          stowelegacyestate.com/stowe-auction---main-production-page
+          <span class="link-icon" aria-hidden="true">↗</span>
+        </a>
+      </div>
+      <div class="hero-metric">
+        <div class="hero-value" id="rateControl">—</div>
+        <div class="hero-label">Unique submission rate</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-val" id="subsControl">—</div>
+          <div class="stat-lbl">Unique submissions</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="viewsControl">—</div>
+          <div class="stat-lbl">Page views</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vs-divider">VS</div>
+
+    <div class="arm variation" id="armVariation">
+      <div class="arm-head">
+        <div>
+          <div class="arm-label">B · Variation</div>
+          <div class="arm-title">New design</div>
+        </div>
+      </div>
+      <div class="arm-url">
+        <a href="https://stowelegacyestate.com/home-184946" target="_blank" rel="noopener noreferrer">
+          stowelegacyestate.com/home-184946 · Funnel Leads form
+          <span class="link-icon" aria-hidden="true">↗</span>
+        </a>
+      </div>
+      <div class="hero-metric">
+        <div class="hero-value" id="rateVariation">—</div>
+        <div class="hero-label">Unique submission rate</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-val" id="subsVariation">—</div>
+          <div class="stat-lbl">Unique submissions</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="viewsVariation">—</div>
+          <div class="stat-lbl">Page views</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="toggle-wrap">
+      <label class="toggle" title="Exclude repeat submits from the same person">
+        <input type="checkbox" id="removeDupes" checked />
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </label>
+      <span class="toggle-label"><strong>Remove duplicates</strong> · show unique people only in tables</span>
+    </div>
+  </div>
+
+  <div class="tables-section">
+    <div class="table-card control">
+      <h2>Control — form submissions</h2>
+      <table>
+        <thead><tr><th>#</th><th>Time (EDT)</th><th>Name</th><th>Email</th><th>Form</th><th></th></tr></thead>
+        <tbody id="controlTable"></tbody>
+      </table>
+    </div>
+    <div class="table-card variation">
+      <h2>Variation — form submissions</h2>
+      <table>
+        <thead><tr><th>#</th><th>Time (EDT)</th><th>Name</th><th>Email</th><th>URL</th><th></th></tr></thead>
+        <tbody id="variationTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const DATA = {
+  "test_started_utc": "2026-07-15 15:19:56",
+  "control_url": "https://stowelegacyestate.com/stowe-auction---main-production-page",
+  "variation_url": "https://stowelegacyestate.com/home-184946",
+  "control_submissions": [
+    {
+      "n": 1,
+      "time": "2026-07-15T11:41:00",
+      "name": "Briana Moses",
+      "email": "mosesbriana98@gmail.com",
+      "url": "\u2014",
+      "source": "TOP_VT-Optin_V1.1",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 2,
+      "time": "2026-07-15T11:54:00",
+      "name": "Hardip and Harjinderbrar",
+      "email": "hhbrar@hotmail.com",
+      "url": "\u2014",
+      "source": "TOP_VT-Optin_V1.1",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 3,
+      "time": "2026-07-15T14:08:00",
+      "name": "Kim",
+      "email": "readme4000@aol.com",
+      "url": "\u2014",
+      "source": "TOP_VT-Optin_V1.1",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 4,
+      "time": "2026-07-15T16:21:00",
+      "name": "Thomas Kim",
+      "email": "numarkton@gmail.com",
+      "url": "\u2014",
+      "source": "TOP_VT-Optin_V1.1",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 5,
+      "time": "2026-07-15T16:33:00",
+      "name": "Robert",
+      "email": "robertward@coachrealtors.com",
+      "url": "\u2014",
+      "source": "VT-Optin_V1.1",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 6,
+      "time": "2026-07-15T16:41:00",
+      "name": "Susan",
+      "email": "susangilf@gmail.com",
+      "url": "\u2014",
+      "source": "TOP_VT-Optin_V1.1",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 7,
+      "time": "2026-07-15T17:03:00",
+      "name": "Cedric",
+      "email": "cedric@tri-logis.ca",
+      "url": "\u2014",
+      "source": "VT-Optin_V1.1",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 8,
+      "time": "2026-07-15T17:14:00",
+      "name": "Katie",
+      "email": "kcroteau@gmail.com",
+      "url": "\u2014",
+      "source": "VT-Optin_V1.1",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 9,
+      "time": "",
+      "name": "Repeat submit",
+      "email": "\u2014",
+      "url": "\u2014",
+      "source": "\u2014",
+      "duplicate": true,
+      "unknown": true
+    }
+  ],
+  "variation_submissions": [
+    {
+      "n": 1,
+      "time": "2026-07-15T11:47:00",
+      "name": "Sheri Wilson",
+      "email": "sfelperwilson@gmail.com",
+      "url": "home-184946",
+      "source": "Funnel Leads",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 2,
+      "time": "2026-07-15T11:51:00",
+      "name": "Sheri Wilson",
+      "email": "sfelperwilson@gmail.com",
+      "url": "home-184946",
+      "source": "Funnel Leads",
+      "duplicate": true,
+      "unknown": false
+    },
+    {
+      "n": 3,
+      "time": "2026-07-15T12:00:00",
+      "name": "Midhun",
+      "email": "midhun@thenorthernlights.ca",
+      "url": "home-184946",
+      "source": "Funnel Leads",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 4,
+      "time": "2026-07-15T13:30:00",
+      "name": "Brian",
+      "email": "curanger@gmail.com",
+      "url": "home-184946",
+      "source": "Funnel Leads",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 5,
+      "time": "2026-07-15T14:47:00",
+      "name": "Daniel F Mittelman",
+      "email": "dmittelman@gmail.com",
+      "url": "root /",
+      "source": "Funnel Leads",
+      "duplicate": false,
+      "unknown": false
+    },
+    {
+      "n": 6,
+      "time": "2026-07-15T16:10:00",
+      "name": "Edward von Turkovich",
+      "email": "ed.vonturkovich@gmail.com",
+      "url": "home-184946",
+      "source": "Funnel Leads",
+      "duplicate": false,
+      "unknown": false
+    }
+  ],
+  "ghl": {
+    "views": {
+      "control": 489,
+      "variation": 499
+    },
+    "optins": {
+      "control": 9,
+      "variation": 6
+    },
+    "notes": "Page views and form submission totals from GHL split test UI. Each form submission = one Submit click (repeat submits count separately).",
+    "updated_at": "2026-07-15T14:24:00-04:00"
+  }
+};
+
+    function fmtTime(iso) {
+      const d = new Date(iso);
+      return d.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    function countUnique(rows) {
+      return rows.filter(r => !r.duplicate).length;
+    }
+
+    function calcRate(subs, views) {
+      return views ? (subs / views) * 100 : 0;
+    }
+
+    function cell(value, extraClass) {
+      const text = value == null ? '' : String(value);
+      const safe = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+      const cls = extraClass ? ` class="${extraClass}"` : '';
+      return `<td${cls} title="${safe}">${safe}</td>`;
+    }
+
+    function fillTable(id, rows, cols, removeDupes) {
+      const visible = removeDupes ? rows.filter(r => !r.duplicate) : rows;
+      const tbody = document.getElementById(id);
+      tbody.innerHTML = visible.map((r, idx) => {
+        const cls = r.duplicate ? ' class="dupe"' : '';
+        return `<tr${cls}>${cols.map((c, i) => {
+          const value = i === 0 ? idx + 1 : c(r);
+          const extra = i === cols.length - 1 && value === 'DUPE' ? 'dupe-flag' : '';
+          return cell(value, extra);
+        }).join('')}</tr>`;
+      }).join('');
+    }
+
+    function render(removeDupes) {
+      const ctrlRows = DATA.control_submissions;
+      const varRows = DATA.variation_submissions;
+      const views = DATA.ghl.views;
+
+      const ctrlUnique = countUnique(ctrlRows);
+      const varUnique = countUnique(varRows);
+      const ctrlRate = calcRate(ctrlUnique, views.control);
+      const varRate = calcRate(varUnique, views.variation);
+
+      document.getElementById('rateControl').textContent = ctrlRate.toFixed(2) + '%';
+      document.getElementById('rateVariation').textContent = varRate.toFixed(2) + '%';
+      document.getElementById('subsControl').textContent = ctrlUnique;
+      document.getElementById('subsVariation').textContent = varUnique;
+      document.getElementById('viewsControl').textContent = views.control.toLocaleString();
+      document.getElementById('viewsVariation').textContent = views.variation.toLocaleString();
+
+      fillTable('controlTable', ctrlRows, [
+        r => r.n,
+        r => r.time ? fmtTime(r.time) : '—',
+        r => r.name,
+        r => r.email,
+        r => r.source,
+        r => r.duplicate ? 'DUPE' : ''
+      ], removeDupes);
+      fillTable('variationTable', varRows, [
+        r => r.n,
+        r => r.time ? fmtTime(r.time) : '—',
+        r => r.name,
+        r => r.email,
+        r => r.url,
+        r => r.duplicate ? 'DUPE' : ''
+      ], removeDupes);
+
+      const ctrlVisible = removeDupes ? ctrlRows.filter(r => !r.duplicate).length : ctrlRows.length;
+      const varVisible = removeDupes ? varRows.filter(r => !r.duplicate).length : varRows.length;
+      document.querySelector('.table-card.control h2').textContent =
+        `Control — form submissions (${ctrlVisible})`;
+      document.querySelector('.table-card.variation h2').textContent =
+        `Variation — form submissions (${varVisible})`;
+    }
+
+    const toggle = document.getElementById('removeDupes');
+    toggle.addEventListener('change', () => render(toggle.checked));
+    render(true);
+  </script>
+</body>
+</html>

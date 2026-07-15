@@ -1,0 +1,23 @@
+{
+  "home_page_1": {
+    "label": "Page 1 split test",
+    "test_started_at": "2026-07-15T15:19:56Z",
+    "baseline_start": "2026-07-01",
+    "control_url_pattern": "%stowe-auction---main-production-page%",
+    "variation_url_pattern": "%home-184946%",
+    "legacy_baseline_url_patterns": [
+      "%stowelegacyestate.com/home%",
+      "%stowelegacyestate.com/?%",
+      "https://stowelegacyestate.com/"
+    ],
+    "notes": "Pre-test traffic used /home and /. Split test routes to main-production-page (control) vs home-184946 (variation)."
+  },
+  "private_showings": {
+    "label": "Private Showings split test",
+    "test_started_at": "2026-07-11T19:31:00Z",
+    "baseline_start": "2026-07-01",
+    "control_url_pattern": "%stowe-auction--private-showings%",
+    "variation_url_pattern": "%private-showings-page-345178%",
+    "notes": "Variation URL has -page-345178 suffix."
+  }
+}
