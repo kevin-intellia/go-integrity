@@ -1,0 +1,96 @@
+{
+  "control_form_name": "TOP_VT-Optin / VT-Optin",
+  "control_submissions": [
+    {
+      "time_edt": "2026-07-15T11:41:00",
+      "name": "Briana Moses",
+      "email": "mosesbriana98@gmail.com",
+      "source": "TOP_VT-Optin_V1.1"
+    },
+    {
+      "time_edt": "2026-07-15T11:54:00",
+      "name": "Hardip and Harjinderbrar",
+      "email": "hhbrar@hotmail.com",
+      "source": "TOP_VT-Optin_V1.1"
+    },
+    {
+      "time_edt": "2026-07-15T14:08:00",
+      "name": "Kim",
+      "email": "readme4000@aol.com",
+      "source": "TOP_VT-Optin_V1.1"
+    },
+    {
+      "time_edt": "2026-07-15T16:21:00",
+      "name": "Thomas Kim",
+      "email": "numarkton@gmail.com",
+      "source": "TOP_VT-Optin_V1.1"
+    },
+    {
+      "time_edt": "2026-07-15T16:33:00",
+      "name": "Robert",
+      "email": "robertward@coachrealtors.com",
+      "source": "VT-Optin_V1.1"
+    },
+    {
+      "time_edt": "2026-07-15T16:41:00",
+      "name": "Susan",
+      "email": "susangilf@gmail.com",
+      "source": "TOP_VT-Optin_V1.1"
+    },
+    {
+      "time_edt": "2026-07-15T17:03:00",
+      "name": "Cedric",
+      "email": "cedric@tri-logis.ca",
+      "source": "VT-Optin_V1.1"
+    },
+    {
+      "time_edt": "2026-07-15T17:14:00",
+      "name": "Katie",
+      "email": "kcroteau@gmail.com",
+      "source": "VT-Optin_V1.1"
+    }
+  ],
+  "variation_form_name": "Funnel Leads",
+  "variation_submissions": [
+    {
+      "time_edt": "2026-07-15T11:47:00",
+      "name": "Sheri Wilson",
+      "email": "sfelperwilson@gmail.com",
+      "phone": "+1 802-999-2011",
+      "url": "home-184946"
+    },
+    {
+      "time_edt": "2026-07-15T11:51:00",
+      "name": "Sheri Wilson",
+      "email": "sfelperwilson@gmail.com",
+      "phone": "+1 802-999-2011",
+      "url": "home-184946",
+      "duplicate": true
+    },
+    {
+      "time_edt": "2026-07-15T12:00:00",
+      "name": "Midhun",
+      "email": "midhun@thenorthernlights.ca",
+      "url": "home-184946"
+    },
+    {
+      "time_edt": "2026-07-15T13:30:00",
+      "name": "Brian",
+      "email": "curanger@gmail.com",
+      "url": "home-184946"
+    },
+    {
+      "time_edt": "2026-07-15T14:47:00",
+      "name": "Daniel F Mittelman",
+      "email": "dmittelman@gmail.com",
+      "url": "root /"
+    },
+    {
+      "time_edt": "2026-07-15T16:10:00",
+      "name": "Edward von Turkovich",
+      "email": "ed.vonturkovich@gmail.com",
+      "url": "home-184946"
+    }
+  ],
+  "notes": "Form submissions from GHL Sites → Forms (manual until forms API scope is added). Each row = one Submit click. GHL opt-in totals may include repeat submits not yet listed here."
+}

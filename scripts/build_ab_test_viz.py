@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "reports" / "home-ab-test.html"
 OUT_STATIC = ROOT / "static" / "home-ab-test.html"
 GHL_STATS_STATIC = ROOT / "static" / "ghl_split_stats_home_ab.json"
+FORM_SUBMISSIONS_STATIC = ROOT / "static" / "form_submissions_home_ab.json"
 SUBMISSIONS_CONFIG = ROOT / "config" / "form_submissions_home_ab.json"
 GHL_STATS_CONFIG = ROOT / "config" / "ghl_split_stats_home_ab.json"
 GHL_DB = ROOT / "sources" / "ghl" / "ghl.duckdb"
@@ -722,6 +723,7 @@ def main() -> None:
     OUT_STATIC.parent.mkdir(parents=True, exist_ok=True)
     OUT_STATIC.write_text(build_html(data, embedded=True))
     GHL_STATS_STATIC.write_text(GHL_STATS_CONFIG.read_text())
+    FORM_SUBMISSIONS_STATIC.write_text(SUBMISSIONS_CONFIG.read_text())
     print(f"Wrote {OUT}")
     print(f"Wrote {OUT_STATIC}")
     print(f"  GHL form submissions: control {ghl_stats['optins']['control']}, variation {ghl_stats['optins']['variation']}")

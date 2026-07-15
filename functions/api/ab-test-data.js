@@ -129,17 +129,45 @@ function buildSubmissionRow(contact, index) {
 	};
 }
 
-function filterArmContacts(contacts, match) {
-	const needle = match.toLowerCase();
+function isControlContact(contact) {
+	const email = (contact.email || '').trim();
+	if (!email || !isSinceTestStart(contact.dateAdded)) {
+		return false;
+	}
+	return pageUrlFromContact(contact).toLowerCase().includes(CONTROL_MATCH);
+}
+
+function isVariationContact(contact) {
+	const email = (contact.email || '').trim();
+	if (!email) {
+		return false;
+	}
+
+	const pageUrl = pageUrlFromContact(contact).toLowerCase();
+	if (pageUrl.includes(CONTROL_MATCH)) {
+		return false;
+	}
+
+	if (pageUrl.includes(VARIATION_MATCH) && isSinceTestStart(contact.dateAdded)) {
+		return true;
+	}
+
+	// Variation funnel (Website Lead) can record root URL without home-184946 in page_url.
+	const source = (contact.source || '').trim();
+	if (source === 'Website Lead') {
+		const onStoweSite =
+			pageUrl.includes('stowelegacyestate.com/home-184946') ||
+			pageUrl === 'https://stowelegacyestate.com/' ||
+			pageUrl.startsWith('https://stowelegacyestate.com/?');
+		return onStoweSite && isSinceTestStart(contact.dateAdded);
+	}
+
+	return false;
+}
+
+function filterArmContacts(contacts, arm) {
 	return contacts
-		.filter((contact) => {
-			const email = (contact.email || '').trim();
-			if (!email || !isSinceTestStart(contact.dateAdded)) {
-				return false;
-			}
-			const pageUrl = pageUrlFromContact(contact).toLowerCase();
-			return pageUrl.includes(needle);
-		})
+		.filter((contact) => (arm === 'control' ? isControlContact(contact) : isVariationContact(contact)))
 		.sort((a, b) => new Date(a.dateAdded).getTime() - new Date(b.dateAdded).getTime());
 }
 
@@ -175,8 +203,8 @@ function padToGhlCount(rows, target) {
 	return out.map((row, index) => ({ ...row, n: index + 1 }));
 }
 
-async function loadGhlStats(request) {
-	const statsUrl = new URL('/ghl_split_stats_home_ab.json', request.url);
+async function loadStaticJson(request, filename) {
+	const statsUrl = new URL(`/${filename}`, request.url);
 	try {
 		const response = await fetch(statsUrl, { cache: 'no-store' });
 		if (!response.ok) {
@@ -186,6 +214,54 @@ async function loadGhlStats(request) {
 	} catch {
 		return null;
 	}
+}
+
+async function loadGhlStats(request) {
+	return loadStaticJson(request, 'ghl_split_stats_home_ab.json');
+}
+
+function rowFromManual(entry, formName) {
+	return {
+		n: 0,
+		time: entry.time_edt || '',
+		name: entry.name || '—',
+		email: entry.email || '—',
+		url: entry.url || '—',
+		source: entry.source || formName,
+		duplicate: Boolean(entry.duplicate)
+	};
+}
+
+function mergeManualRows(apiRows, manualEntries, formName) {
+	const out = [...apiRows];
+
+	for (const entry of manualEntries || []) {
+		const email = String(entry.email || '')
+			.trim()
+			.toLowerCase();
+		if (!email) {
+			continue;
+		}
+
+		const manualCount = manualEntries.filter(
+			(row) =>
+				String(row.email || '')
+					.trim()
+					.toLowerCase() === email
+		).length;
+		const currentCount = out.filter(
+			(row) =>
+				String(row.email || '')
+					.trim()
+					.toLowerCase() === email
+		).length;
+
+		if (currentCount < manualCount) {
+			out.push(rowFromManual(entry, formName));
+		}
+	}
+
+	return out.sort((a, b) => new Date(a.time || 0).getTime() - new Date(b.time || 0).getTime());
 }
 
 function statsFromRows(controlRows, variationRows, statsJson) {
@@ -228,15 +304,28 @@ export async function onRequestGet({ env, request }) {
 
 	try {
 		const contacts = await fetchAllContacts(token, locationId);
-		const controlRaw = filterArmContacts(contacts, CONTROL_MATCH).map((contact, index) =>
+		const formConfig = (await loadStaticJson(request, 'form_submissions_home_ab.json')) || {};
+
+		const controlRaw = filterArmContacts(contacts, 'control').map((contact, index) =>
 			buildSubmissionRow(contact, index + 1)
 		);
-		const variationRaw = filterArmContacts(contacts, VARIATION_MATCH).map((contact, index) =>
+		const variationRaw = filterArmContacts(contacts, 'variation').map((contact, index) =>
 			buildSubmissionRow(contact, index + 1)
 		);
 
-		const controlMarked = markDuplicates(controlRaw);
-		const variationMarked = markDuplicates(variationRaw);
+		const controlMerged = mergeManualRows(
+			controlRaw,
+			formConfig.control_submissions,
+			formConfig.control_form_name || 'Control form'
+		);
+		const variationMerged = mergeManualRows(
+			variationRaw,
+			formConfig.variation_submissions,
+			formConfig.variation_form_name || 'Funnel Leads'
+		);
+
+		const controlMarked = markDuplicates(controlMerged);
+		const variationMarked = markDuplicates(variationMerged);
 		const statsJson = await loadGhlStats(request);
 		const ghl = statsFromRows(controlMarked, variationMarked, statsJson);
 
