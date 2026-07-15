@@ -11,6 +11,8 @@ case "$TARGET" in
 			rm -f pages/meta-ads.md
 			echo "Excluded internal page: pages/meta-ads.md"
 		fi
+		rm -f static/home-ab-test.html reports/home-ab-test.html
+		echo "Excluded internal A/B report assets"
 		cat > "$REDIRECTS" <<'EOF'
 / /client-report/ 302
 /index /client-report/ 302

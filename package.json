@@ -5,7 +5,7 @@
     "build": "evidence build",
     "build:strict": "evidence build:strict",
     "dev": "node scripts/dev.js",
-    "dev:once": "npx evidence dev --open /",
+    "dev:once": "node scripts/dev-once.js",
     "test": "evidence build",
     "sources": "evidence sources && bash scripts/sync-static-data.sh",
     "sources:strict": "evidence sources --strict && bash scripts/sync-static-data.sh",

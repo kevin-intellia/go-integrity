@@ -25,9 +25,6 @@ python3 scripts/sync_meta_ads.py
 echo "Syncing GHL CRM..."
 python3 scripts/sync_ghl.py
 
-echo "Building Page 1 A/B test report..."
-python3 scripts/build_ab_test_viz.py
-
 echo "Building Evidence sources..."
 npm run sources
 
@@ -36,6 +33,11 @@ node scripts/patch-vite-config.js
 
 echo "Preparing deploy target: $DEPLOY_TARGET"
 bash scripts/prepare-deploy-target.sh "$DEPLOY_TARGET"
+
+if [ "$DEPLOY_TARGET" = "internal" ]; then
+	echo "Building Page 1 A/B test report (internal only)..."
+	python3 scripts/build_ab_test_viz.py
+fi
 
 echo "Building static site ($DEPLOY_TARGET)..."
 rm -rf build

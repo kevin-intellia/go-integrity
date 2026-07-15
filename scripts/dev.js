@@ -1,15 +1,40 @@
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const DEV_OPEN_PATH = '/meta-ads/';
 
 import './patch-vite-config.js';
 
 function ensureSvelteKitTypeDirs() {
 	const typesRoot = path.join(root, '.evidence/template/.svelte-kit/types/src/pages');
 	fs.mkdirSync(typesRoot, { recursive: true });
+
+	const typesFile = path.join(typesRoot, '$types.d.ts');
+	if (!fs.existsSync(typesFile)) {
+		fs.writeFileSync(typesFile, 'export {};\n');
+	}
+
+	for (const route of ['meta-ads', 'client-report', 'facebook', 'api', 'explore', 'settings']) {
+		fs.mkdirSync(path.join(typesRoot, route), { recursive: true });
+	}
+}
+
+function cleanDevArtifacts() {
+	const buildDir = path.join(root, 'build');
+	if (fs.existsSync(buildDir)) {
+		fs.rmSync(buildDir, { recursive: true, force: true });
+		console.log('Removed stale build/ output (confuses Vite dev watcher).');
+	}
+}
+
+function prepareDevAssets() {
+	spawnSync('.venv/bin/python', ['scripts/build_ab_test_viz.py'], {
+		cwd: root,
+		stdio: 'inherit'
+	});
 }
 
 const MAX_RESTARTS = 10;
@@ -19,17 +44,24 @@ let restartCount = 0;
 let openBrowser = true;
 let shuttingDown = false;
 let child = null;
+let prepared = false;
 
 function startDev() {
-	ensureSvelteKitTypeDirs();
-	child = spawn(
-		openBrowser ? 'npx evidence dev --open /' : 'npx evidence dev',
-		{
-			cwd: root,
-			stdio: 'inherit',
-			shell: true
-		}
-	);
+	if (!prepared) {
+		cleanDevArtifacts();
+		ensureSvelteKitTypeDirs();
+		prepareDevAssets();
+		prepared = true;
+	} else {
+		ensureSvelteKitTypeDirs();
+	}
+
+	const openArg = openBrowser ? ` --open ${DEV_OPEN_PATH}` : '';
+	child = spawn(`npx evidence dev${openArg}`, {
+		cwd: root,
+		stdio: 'inherit',
+		shell: true
+	});
 	openBrowser = false;
 
 	child.on('exit', (code, signal) => {
