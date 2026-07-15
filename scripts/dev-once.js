@@ -21,7 +21,7 @@ if (fs.existsSync(buildDir)) {
 
 spawnSync('.venv/bin/python', ['scripts/build_ab_test_viz.py'], { cwd: root, stdio: 'inherit' });
 
-spawnSync('npx evidence dev --open /meta-ads/', {
+spawnSync('npx evidence dev --open /home-ab-test/', {
 	cwd: root,
 	stdio: 'inherit',
 	shell: true

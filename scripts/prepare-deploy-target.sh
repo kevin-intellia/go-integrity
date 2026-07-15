@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remove the other dashboard page before build so it is not published at all.
+# Remove pages that should not ship on each Cloudflare target.
 set -euo pipefail
 
 TARGET="${1:?Usage: prepare-deploy-target.sh client|internal}"
@@ -7,10 +7,12 @@ REDIRECTS="static/_redirects"
 
 case "$TARGET" in
 	client)
-		if [ -f pages/meta-ads.md ]; then
-			rm -f pages/meta-ads.md
-			echo "Excluded internal page: pages/meta-ads.md"
-		fi
+		for page in meta-ads.md home-ab-test.md; do
+			if [ -f "pages/$page" ]; then
+				rm -f "pages/$page"
+				echo "Excluded internal page: pages/$page"
+			fi
+		done
 		rm -f static/home-ab-test.html reports/home-ab-test.html
 		echo "Excluded internal A/B report assets"
 		cat > "$REDIRECTS" <<'EOF'
@@ -21,14 +23,16 @@ EOF
 		echo "Wrote client redirects"
 		;;
 	internal)
-		if [ -f pages/client-report.md ]; then
-			rm -f pages/client-report.md
-			echo "Excluded client page: pages/client-report.md"
-		fi
+		for page in client-report.md meta-ads.md index.md facebook.md; do
+			if [ -f "pages/$page" ]; then
+				rm -f "pages/$page"
+				echo "Excluded page: pages/$page"
+			fi
+		done
 		cat > "$REDIRECTS" <<'EOF'
-/ /meta-ads/ 302
-/index /meta-ads/ 302
-/index/ /meta-ads/ 302
+/ /home-ab-test/ 302
+/index /home-ab-test/ 302
+/index/ /home-ab-test/ 302
 EOF
 		echo "Wrote internal redirects"
 		;;

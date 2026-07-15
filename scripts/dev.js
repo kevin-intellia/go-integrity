@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DEV_OPEN_PATH = '/meta-ads/';
+const DEV_OPEN_PATH = '/home-ab-test/';
 
 import './patch-vite-config.js';
 
@@ -17,7 +17,7 @@ function ensureSvelteKitTypeDirs() {
 		fs.writeFileSync(typesFile, 'export {};\n');
 	}
 
-	for (const route of ['meta-ads', 'client-report', 'facebook', 'api', 'explore', 'settings']) {
+	for (const route of ['home-ab-test', 'meta-ads', 'client-report', 'facebook', 'api', 'explore', 'settings']) {
 		fs.mkdirSync(path.join(typesRoot, route), { recursive: true });
 	}
 }
