@@ -2,8 +2,9 @@ const BASE_URL = 'https://services.leadconnectorhq.com';
 const API_VERSION = '2021-07-28';
 const PAGE_SIZE = 100;
 const TEST_START_UTC = '2026-07-15T15:19:56';
-const CONTROL_MATCH = 'main-production-page';
-const VARIATION_MATCH = 'home-184946';
+const CONTROL_SOURCE_PATTERN = /vt-optin/i;
+const VARIATION_SOURCE = 'Website Lead';
+const STOWE_SITE = 'stowelegacyestate.com';
 const RETRYABLE_STATUS_CODES = new Set([400, 429, 500, 502, 503, 504]);
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 

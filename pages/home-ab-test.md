@@ -6,7 +6,7 @@ hide_toc: true
 ---
 
 <p class="text-sm text-base-content-muted mb-4">
-    Home page split test — control (<code>main-production-page</code>) vs variation (<code>home-184946</code>). Started Jul 15, 2026 ~11:19 AM EDT. Rates use unique form submissions ÷ GHL page views.
+    Home page split test — control (<code>TOP_VT-Optin / VT-Optin</code>) vs variation (<code>Funnel Leads</code>). Started Jul 15, 2026 ~11:19 AM EDT. Rates use unique form submissions ÷ GHL page views.
 </p>
 
 <div style="width:100%;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0f1117;">
