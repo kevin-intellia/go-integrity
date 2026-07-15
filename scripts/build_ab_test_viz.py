@@ -555,7 +555,7 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       <div class="arm-head">
         <div>
           <div class="arm-label">A · Control</div>
-          <div class="arm-title">Before design</div>
+          <div class="arm-title">Short form</div>
         </div>
       </div>
       <div class="arm-url">
@@ -586,7 +586,7 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       <div class="arm-head">
         <div>
           <div class="arm-label">B · Variation</div>
-          <div class="arm-title">New design</div>
+          <div class="arm-title">Long form</div>
         </div>
       </div>
       <div class="arm-url">
