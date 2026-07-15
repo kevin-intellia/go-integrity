@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# client = public client report only; internal = Page 1 A/B test only
+# client = client report only; internal = All + Facebook + A/B (no Campaign Analytics)
 DEPLOY_TARGET="${CLOUDFLARE_DEPLOY_TARGET:-${1:-client}}"
 
 if [ -z "${GHL_PRIVATE_INTEGRATION_TOKEN:-}" ]; then

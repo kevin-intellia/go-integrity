@@ -13,7 +13,7 @@
 	export let data;
 
 	const productionHome =
-		import.meta.env.PUBLIC_DEPLOY_TARGET === 'internal' ? '/home-ab-test/' : '/client-report/';
+		import.meta.env.PUBLIC_DEPLOY_TARGET === 'internal' ? '/' : '/client-report/';
 	const homeHref = addBasePath(dev ? '/' : productionHome);
 	const logoHref = homeHref;
 

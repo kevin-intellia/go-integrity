@@ -23,18 +23,14 @@ EOF
 		echo "Wrote client redirects"
 		;;
 	internal)
-		for page in client-report.md meta-ads.md index.md facebook.md; do
+		for page in client-report.md meta-ads.md; do
 			if [ -f "pages/$page" ]; then
 				rm -f "pages/$page"
 				echo "Excluded page: pages/$page"
 			fi
 		done
-		cat > "$REDIRECTS" <<'EOF'
-/ /home-ab-test/ 302
-/index /home-ab-test/ 302
-/index/ /home-ab-test/ 302
-EOF
-		echo "Wrote internal redirects"
+		rm -f "$REDIRECTS"
+		echo "Internal home is index.md — no root redirects"
 		;;
 	*)
 		echo "ERROR: TARGET must be 'client' or 'internal', got: $TARGET"

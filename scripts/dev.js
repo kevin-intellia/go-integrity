@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DEV_OPEN_PATH = '/home-ab-test/';
+const DEV_OPEN_PATH = '/';
 
 import './patch-vite-config.js';
 
