@@ -300,32 +300,85 @@
     .reload-status.error {
       color: #f08080;
     }
-    .views-wrap {
-      display: flex;
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      display: none;
       align-items: center;
-      gap: 0.65rem;
-      flex-wrap: wrap;
+      justify-content: center;
+      padding: 1rem;
+      z-index: 1000;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+    .modal {
+      width: min(100%, 420px);
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 0.55rem 0.85rem;
+      border-radius: 14px;
+      padding: 1.25rem 1.35rem 1.1rem;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+    }
+    .modal h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .modal p {
+      margin: 0 0 1rem;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+    .modal-fields {
+      display: grid;
+      gap: 0.75rem;
+      margin-bottom: 1.1rem;
+    }
+    .modal-fields label {
+      display: grid;
+      gap: 0.35rem;
       font-size: 0.82rem;
       color: var(--muted);
     }
-    .views-wrap strong { color: var(--text); }
-    .views-wrap label {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
+    .modal-fields strong {
+      color: var(--text);
+      font-weight: 600;
     }
-    .views-wrap input {
-      width: 5.5rem;
+    .modal-fields input {
+      width: 100%;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.04);
       color: var(--text);
-      border-radius: 6px;
-      padding: 0.25rem 0.45rem;
-      font-size: 0.82rem;
+      border-radius: 8px;
+      padding: 0.5rem 0.65rem;
+      font-size: 0.95rem;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.55rem;
+    }
+    .modal-btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0.45rem 0.85rem;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .modal-btn.primary {
+      background: rgba(91,141,239,0.22);
+      border-color: rgba(91,141,239,0.45);
+    }
+    .modal-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
     }
   </style>
 </head>
@@ -333,7 +386,7 @@
 
   <div class="page-header">
     <h1>Page 1 A/B Split Test</h1>
-    <p class="sub">Started Jul 15, 2026 ~11:19 AM EDT · Updated 2026-07-15 23:09 UTC</p>
+    <p class="sub">Started Jul 15, 2026 ~11:19 AM EDT · Updated 2026-07-15 23:25 UTC</p>
   </div>
 
   <div class="ab-split">
@@ -407,15 +460,30 @@
       </label>
       <span class="toggle-label"><strong>Remove duplicates</strong> · show unique people only in tables</span>
     </div>
-    <div class="views-wrap">
-      <span><strong>Page views</strong> · paste from GHL split test UI</span>
-      <label>A <input type="number" id="viewsControlInput" min="0" step="1" /></label>
-      <label>B <input type="number" id="viewsVariationInput" min="0" step="1" /></label>
-      <button type="button" class="reload-btn" id="applyViews">Apply views</button>
-    </div>
     <div class="reload-wrap">
-      <button type="button" class="reload-btn" id="reloadData">Reload submissions</button>
-      <span class="reload-status" id="lastUpdated">Submissions: live on reload · Views: from GHL UI above</span>
+      <button type="button" class="reload-btn" id="reloadData">Update data</button>
+      <span class="reload-status" id="lastUpdated">Click Update data to refresh submissions and page views</span>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="updateModal" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="updateModalTitle">
+      <h2 id="updateModalTitle">Update A/B data</h2>
+      <p>Copy page views from GHL → Sites → Funnel → Page 1 split test → Stats. Submissions reload automatically from CRM.</p>
+      <div class="modal-fields">
+        <label>
+          <strong>A · Control page views</strong>
+          <input type="number" id="modalViewsControl" min="0" step="1" />
+        </label>
+        <label>
+          <strong>B · Variation page views</strong>
+          <input type="number" id="modalViewsVariation" min="0" step="1" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="modal-btn" id="cancelUpdate">Cancel</button>
+        <button type="button" class="modal-btn primary" id="confirmUpdate">Update</button>
+      </div>
     </div>
   </div>
 
@@ -626,25 +694,36 @@
       };
     }
 
-    function syncViewInputs() {
-      const views = getActiveViews();
-      document.getElementById('viewsControlInput').value = views.control;
-      document.getElementById('viewsVariationInput').value = views.variation;
-    }
-
-    function applyViews() {
-      const control = Number(document.getElementById('viewsControlInput').value);
-      const variation = Number(document.getElementById('viewsVariationInput').value);
-      if (!Number.isFinite(control) || !Number.isFinite(variation) || control < 0 || variation < 0) {
-        setReloadStatus('Enter valid page view counts', true);
-        return;
-      }
+    function saveViews(control, variation) {
       localStorage.setItem(
         VIEWS_STORAGE_KEY,
         JSON.stringify({ control, variation, updated_at: new Date().toISOString() })
       );
-      render(document.getElementById('removeDupes').checked);
-      setReloadStatus('Page views updated · submissions reload separately', false);
+    }
+
+    function openUpdateModal() {
+      const views = getActiveViews();
+      document.getElementById('modalViewsControl').value = views.control;
+      document.getElementById('modalViewsVariation').value = views.variation;
+      const modal = document.getElementById('updateModal');
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.getElementById('modalViewsControl').focus();
+    }
+
+    function closeUpdateModal() {
+      const modal = document.getElementById('updateModal');
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    function readModalViews() {
+      const control = Number(document.getElementById('modalViewsControl').value);
+      const variation = Number(document.getElementById('modalViewsVariation').value);
+      if (!Number.isFinite(control) || !Number.isFinite(variation) || control < 0 || variation < 0) {
+        return null;
+      }
+      return { control, variation };
     }
 
     function fmtTime(iso) {
@@ -745,17 +824,29 @@
       el.classList.toggle('error', Boolean(isError));
     }
 
-    async function reloadData() {
+    async function reloadData(viewsOverride) {
       const btn = document.getElementById('reloadData');
+      const confirmBtn = document.getElementById('confirmUpdate');
       btn.disabled = true;
+      confirmBtn.disabled = true;
       setReloadStatus('Loading…', false);
 
       try {
+        if (viewsOverride) {
+          saveViews(viewsOverride.control, viewsOverride.variation);
+        }
+
         const response = await fetch('/api/ab-test-data', { cache: 'no-store' });
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok || !payload.ok) {
           const detail = payload.error || `Request failed (${response.status})`;
+          if (response.status === 404 && viewsOverride) {
+            closeUpdateModal();
+            render(document.getElementById('removeDupes').checked);
+            setReloadStatus('Page views saved · live submissions need deployed internal site', false);
+            return;
+          }
           if (response.status === 404) {
             throw new Error('Live reload available on deployed internal site');
           }
@@ -767,21 +858,38 @@
         if (payload.ghl?.optins) {
           DATA.ghl.optins = payload.ghl.optins;
         }
+        closeUpdateModal();
         render(document.getElementById('removeDupes').checked);
-        setReloadStatus('Submissions reloaded ' + formatUpdatedAt(payload.updated_at) + ' · update page views from GHL UI above', false);
+        setReloadStatus('Updated ' + formatUpdatedAt(payload.updated_at), false);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Reload failed';
         setReloadStatus(message, true);
       } finally {
         btn.disabled = false;
+        confirmBtn.disabled = false;
       }
+    }
+
+    async function confirmUpdate() {
+      const views = readModalViews();
+      if (!views) {
+        setReloadStatus('Enter valid page view counts', true);
+        return;
+      }
+      await reloadData(views);
     }
 
     const toggle = document.getElementById('removeDupes');
     toggle.addEventListener('change', () => render(toggle.checked));
-    document.getElementById('reloadData').addEventListener('click', reloadData);
-    document.getElementById('applyViews').addEventListener('click', applyViews);
-    syncViewInputs();
+    document.getElementById('reloadData').addEventListener('click', openUpdateModal);
+    document.getElementById('cancelUpdate').addEventListener('click', closeUpdateModal);
+    document.getElementById('confirmUpdate').addEventListener('click', confirmUpdate);
+    document.getElementById('updateModal').addEventListener('click', (event) => {
+      if (event.target.id === 'updateModal') closeUpdateModal();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeUpdateModal();
+    });
     render(true);
   </script>
 </body>
