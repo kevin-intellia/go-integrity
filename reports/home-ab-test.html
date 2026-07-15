@@ -386,7 +386,7 @@
 
   <div class="page-header">
     <h1>Page 1 A/B Split Test</h1>
-    <p class="sub">Started Jul 15, 2026 ~11:19 AM EDT · Updated 2026-07-15 23:30 UTC</p>
+    <p class="sub">Started Jul 15, 2026 ~11:19 AM EDT · Updated 2026-07-15 23:38 UTC</p>
   </div>
 
   <div class="ab-split">
@@ -425,7 +425,7 @@
       <div class="arm-head">
         <div>
           <div class="arm-label">B · Variation</div>
-          <div class="arm-title">New design</div>
+          <div class="arm-title">Long form</div>
         </div>
       </div>
       <div class="arm-url">
@@ -677,6 +677,45 @@
   }
 };
     const VIEWS_STORAGE_KEY = 'home_ab_page_views';
+    const SUBMISSIONS_STORAGE_KEY = 'home_ab_submissions';
+
+    function loadCachedSubmissions() {
+      try {
+        const cached = JSON.parse(localStorage.getItem(SUBMISSIONS_STORAGE_KEY) || 'null');
+        if (!cached?.control_submissions || !cached?.variation_submissions) {
+          return false;
+        }
+        DATA.control_submissions = cached.control_submissions;
+        DATA.variation_submissions = cached.variation_submissions;
+        if (cached.ghl?.optins) {
+          DATA.ghl.optins = cached.ghl.optins;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function saveCachedSubmissions(payload) {
+      localStorage.setItem(
+        SUBMISSIONS_STORAGE_KEY,
+        JSON.stringify({
+          control_submissions: payload.control_submissions,
+          variation_submissions: payload.variation_submissions,
+          ghl: { optins: payload.ghl?.optins },
+          updated_at: payload.updated_at || new Date().toISOString()
+        })
+      );
+    }
+
+    function applyPayload(payload) {
+      DATA.control_submissions = payload.control_submissions;
+      DATA.variation_submissions = payload.variation_submissions;
+      if (payload.ghl?.optins) {
+        DATA.ghl.optins = payload.ghl.optins;
+      }
+      saveCachedSubmissions(payload);
+    }
 
     function getActiveViews() {
       try {
@@ -824,12 +863,14 @@
       el.classList.toggle('error', Boolean(isError));
     }
 
-    async function reloadData(viewsOverride) {
+    async function fetchLiveData({ silent = false, viewsOverride = null, closeModal = false } = {}) {
       const btn = document.getElementById('reloadData');
       const confirmBtn = document.getElementById('confirmUpdate');
-      btn.disabled = true;
-      confirmBtn.disabled = true;
-      setReloadStatus('Loading…', false);
+      if (!silent) {
+        btn.disabled = true;
+        confirmBtn.disabled = true;
+        setReloadStatus('Loading…', false);
+      }
 
       try {
         if (viewsOverride) {
@@ -842,32 +883,40 @@
         if (!response.ok || !payload.ok) {
           const detail = payload.error || `Request failed (${response.status})`;
           if (response.status === 404 && viewsOverride) {
-            closeUpdateModal();
+            if (closeModal) closeUpdateModal();
             render(document.getElementById('removeDupes').checked);
             setReloadStatus('Page views saved · live submissions need deployed internal site', false);
-            return;
+            return false;
           }
           if (response.status === 404) {
-            throw new Error('Live reload available on deployed internal site');
+            if (!silent) throw new Error('Live reload available on deployed internal site');
+            return false;
           }
-          throw new Error(detail);
+          if (!silent) throw new Error(detail);
+          return false;
         }
 
-        DATA.control_submissions = payload.control_submissions;
-        DATA.variation_submissions = payload.variation_submissions;
-        if (payload.ghl?.optins) {
-          DATA.ghl.optins = payload.ghl.optins;
-        }
-        closeUpdateModal();
+        applyPayload(payload);
+        if (closeModal) closeUpdateModal();
         render(document.getElementById('removeDupes').checked);
         setReloadStatus('Updated ' + formatUpdatedAt(payload.updated_at), false);
+        return true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Reload failed';
-        setReloadStatus(message, true);
+        if (!silent) {
+          const message = error instanceof Error ? error.message : 'Reload failed';
+          setReloadStatus(message, true);
+        }
+        return false;
       } finally {
-        btn.disabled = false;
-        confirmBtn.disabled = false;
+        if (!silent) {
+          btn.disabled = false;
+          confirmBtn.disabled = false;
+        }
       }
+    }
+
+    async function reloadData(viewsOverride) {
+      await fetchLiveData({ viewsOverride, closeModal: true });
     }
 
     async function confirmUpdate() {
@@ -890,7 +939,18 @@
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') closeUpdateModal();
     });
+
+    const hadCachedSubmissions = loadCachedSubmissions();
     render(true);
+    if (hadCachedSubmissions) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(SUBMISSIONS_STORAGE_KEY) || '{}');
+        if (cached.updated_at) {
+          setReloadStatus('Loaded ' + formatUpdatedAt(cached.updated_at) + ' · refreshing…', false);
+        }
+      } catch {}
+    }
+    fetchLiveData({ silent: true });
   </script>
 </body>
 </html>
