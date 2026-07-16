@@ -66,7 +66,7 @@ Use **Encrypt** (Secret) for each. After saving, **Retry deployment**.
 
 ## 5. Internal A/B page views (KV)
 
-The Page 1 A/B dashboard stores **shared page views** in Cloudflare KV so one update applies for the whole team.
+The Page 1 A/B dashboard stores **shared GHL stats** (page views + opt-ins) in Cloudflare KV so one update applies for the whole team.
 
 On the **internal** project only:
 
@@ -77,7 +77,7 @@ On the **internal** project only:
    - **KV namespace:** the namespace you created
 4. **Retry deployment**
 
-Until KV is bound, page views fall back to the static JSON from deploy. Saving new views via **Update data** requires the KV binding.
+Until KV is bound, stats fall back to the static JSON from deploy. Saving via **Update data** requires the KV binding — paste all four numbers from GHL (views + opt-ins for each arm).
 
 ## 6. Optional: Refresh button
 

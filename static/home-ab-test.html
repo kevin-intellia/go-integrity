@@ -477,12 +477,12 @@
       </div>
       <div class="hero-metric">
         <div class="hero-value" id="rateControl">—</div>
-        <div class="hero-label">Unique submission rate</div>
+        <div class="hero-label">Opt-in rate</div>
       </div>
       <div class="stat-row">
         <div class="stat">
           <div class="stat-val" id="subsControl">—</div>
-          <div class="stat-lbl">Unique submissions</div>
+          <div class="stat-lbl">Opt-ins</div>
         </div>
         <div class="stat">
           <div class="stat-val" id="viewsControl">—</div>
@@ -508,12 +508,12 @@
       </div>
       <div class="hero-metric">
         <div class="hero-value" id="rateVariation">—</div>
-        <div class="hero-label">Unique submission rate</div>
+        <div class="hero-label">Opt-in rate</div>
       </div>
       <div class="stat-row">
         <div class="stat">
           <div class="stat-val" id="subsVariation">—</div>
-          <div class="stat-lbl">Unique submissions</div>
+          <div class="stat-lbl">Opt-ins</div>
         </div>
         <div class="stat">
           <div class="stat-val" id="viewsVariation">—</div>
@@ -559,15 +559,23 @@
   <div class="modal-backdrop" id="updateModal" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="updateModalTitle">
       <h2 id="updateModalTitle">Update A/B data</h2>
-      <p>Copy page views from GHL → Sites → Funnel → Page 1 split test → Stats. Saved for everyone on the team. Submissions reload from CRM.</p>
+      <p>Paste <strong>Page Views</strong> and <strong>Opt-Ins</strong> from GHL split test → Stats (same numbers as the GHL table). Saved for the whole team. Submission rows reload from CRM.</p>
       <div class="modal-fields">
         <label>
-          <strong>A · Control page views</strong>
+          <strong>Short form · page views</strong>
           <input type="number" id="modalViewsControl" min="0" step="1" />
         </label>
         <label>
-          <strong>B · Variation page views</strong>
+          <strong>Short form · opt-ins</strong>
+          <input type="number" id="modalOptinsControl" min="0" step="1" />
+        </label>
+        <label>
+          <strong>Long form · page views</strong>
           <input type="number" id="modalViewsVariation" min="0" step="1" />
+        </label>
+        <label>
+          <strong>Long form · opt-ins</strong>
+          <input type="number" id="modalOptinsVariation" min="0" step="1" />
         </label>
       </div>
       <div class="modal-actions">
@@ -804,25 +812,22 @@
       );
     }
 
-    function cumulativeUniqueByDay(rows, dayKeys) {
-      const sorted = usableRows(rows)
-        .map((r) => ({ ...r, t: parseSubmissionTime(r.time) }))
+    function cumulativeAllByDay(rows, dayKeys) {
+      const sorted = rows
+        .filter((r) => !r.unknown && r.time)
+        .map((r) => ({ t: parseSubmissionTime(r.time) }))
         .filter((r) => r.t && !Number.isNaN(r.t.getTime()))
         .sort((a, b) => a.t - b.t);
 
-      const firstDay = {};
-      const seen = new Set();
+      const perDay = {};
       for (const row of sorted) {
-        const email = String(row.email).trim().toLowerCase();
-        if (seen.has(email)) continue;
-        seen.add(email);
         const dk = dayKeyEdt(row.t);
-        firstDay[dk] = (firstDay[dk] || 0) + 1;
+        perDay[dk] = (perDay[dk] || 0) + 1;
       }
 
       let cumulative = 0;
       return dayKeys.map((dk) => {
-        cumulative += firstDay[dk] || 0;
+        cumulative += perDay[dk] || 0;
         return cumulative;
       });
     }
@@ -841,12 +846,13 @@
       const note = document.getElementById('chartNote');
       const dayKeys = dayRangeKeys();
       const views = getActiveViews();
-      const controlTotals = cumulativeUniqueByDay(DATA.control_submissions, dayKeys);
-      const variationTotals = cumulativeUniqueByDay(DATA.variation_submissions, dayKeys);
+      const optins = getActiveOptins();
+      const controlTotals = cumulativeAllByDay(DATA.control_submissions, dayKeys);
+      const variationTotals = cumulativeAllByDay(DATA.variation_submissions, dayKeys);
 
       let controlSeries = controlTotals;
       let variationSeries = variationTotals;
-      let yLabel = 'Unique submissions';
+      let yLabel = 'Opt-ins (cumulative)';
       let yFormat = (v) => String(Math.round(v));
 
       if (chartMode === 'rate') {
@@ -856,12 +862,13 @@
         variationSeries = variationTotals.map((n) =>
           views.variation ? (n / views.variation) * 100 : 0
         );
-        yLabel = 'Unique submission rate';
+        yLabel = 'Opt-in rate';
         yFormat = (v) => `${v.toFixed(2)}%`;
         note.textContent =
-          'Rate = cumulative unique submissions ÷ current GHL page views (same denominator for each day).';
+          `Headline rates use GHL opt-ins (${optins.control} / ${optins.variation}) ÷ page views. Chart tracks identified CRM submits over time.`;
       } else {
-        note.textContent = 'Cumulative unique submissions since test start (Jul 15, 2026).';
+        note.textContent =
+          `Cumulative submits from CRM rows (target: ${optins.control} short / ${optins.variation} long per GHL).`;
       }
 
       const width = 800;
@@ -982,10 +989,20 @@
       };
     }
 
+    function getActiveOptins() {
+      return {
+        control: Number(DATA.ghl?.optins?.control) || 0,
+        variation: Number(DATA.ghl?.optins?.variation) || 0
+      };
+    }
+
     function openUpdateModal() {
       const views = getActiveViews();
+      const optins = getActiveOptins();
       document.getElementById('modalViewsControl').value = views.control;
       document.getElementById('modalViewsVariation').value = views.variation;
+      document.getElementById('modalOptinsControl').value = optins.control;
+      document.getElementById('modalOptinsVariation').value = optins.variation;
       const modal = document.getElementById('updateModal');
       modal.classList.add('open');
       modal.setAttribute('aria-hidden', 'false');
@@ -998,13 +1015,20 @@
       modal.setAttribute('aria-hidden', 'true');
     }
 
-    function readModalViews() {
-      const control = Number(document.getElementById('modalViewsControl').value);
-      const variation = Number(document.getElementById('modalViewsVariation').value);
-      if (!Number.isFinite(control) || !Number.isFinite(variation) || control < 0 || variation < 0) {
-        return null;
-      }
-      return { control, variation };
+    function readModalStats() {
+      const views = {
+        control: Number(document.getElementById('modalViewsControl').value),
+        variation: Number(document.getElementById('modalViewsVariation').value)
+      };
+      const optins = {
+        control: Number(document.getElementById('modalOptinsControl').value),
+        variation: Number(document.getElementById('modalOptinsVariation').value)
+      };
+      const valid = [views.control, views.variation, optins.control, optins.variation].every(
+        (n) => Number.isFinite(n) && n >= 0
+      );
+      if (!valid) return null;
+      return { views, optins };
     }
 
     function fmtTime(iso) {
@@ -1048,16 +1072,15 @@
       const ctrlRows = DATA.control_submissions;
       const varRows = DATA.variation_submissions;
       const views = getActiveViews();
+      const optins = getActiveOptins();
 
-      const ctrlUnique = countUnique(ctrlRows);
-      const varUnique = countUnique(varRows);
-      const ctrlRate = calcRate(ctrlUnique, views.control);
-      const varRate = calcRate(varUnique, views.variation);
+      const ctrlRate = calcRate(optins.control, views.control);
+      const varRate = calcRate(optins.variation, views.variation);
 
       document.getElementById('rateControl').textContent = ctrlRate.toFixed(2) + '%';
       document.getElementById('rateVariation').textContent = varRate.toFixed(2) + '%';
-      document.getElementById('subsControl').textContent = ctrlUnique;
-      document.getElementById('subsVariation').textContent = varUnique;
+      document.getElementById('subsControl').textContent = optins.control.toLocaleString();
+      document.getElementById('subsVariation').textContent = optins.variation.toLocaleString();
       document.getElementById('viewsControl').textContent = views.control.toLocaleString();
       document.getElementById('viewsVariation').textContent = views.variation.toLocaleString();
 
@@ -1106,7 +1129,7 @@
       el.classList.toggle('error', Boolean(isError));
     }
 
-    async function fetchLiveData({ silent = false, viewsOverride = null, closeModal = false } = {}) {
+    async function fetchLiveData({ silent = false, statsOverride = null, closeModal = false } = {}) {
       const btn = document.getElementById('reloadData');
       const confirmBtn = document.getElementById('confirmUpdate');
       if (!silent) {
@@ -1116,12 +1139,12 @@
       }
 
       try {
-        const method = viewsOverride ? 'POST' : 'GET';
+        const method = statsOverride ? 'POST' : 'GET';
         const init = { cache: 'no-store' };
-        if (viewsOverride) {
+        if (statsOverride) {
           init.method = 'POST';
           init.headers = { 'Content-Type': 'application/json' };
-          init.body = JSON.stringify({ views: viewsOverride });
+          init.body = JSON.stringify(statsOverride);
         }
 
         const response = await fetch('/api/ab-test-data', init);
@@ -1129,10 +1152,10 @@
 
         if (!response.ok || !payload.ok) {
           const detail = payload.error || `Request failed (${response.status})`;
-          if (response.status === 404 && viewsOverride) {
+          if (response.status === 404 && statsOverride) {
             if (closeModal) closeUpdateModal();
             render(document.getElementById('removeDupes').checked);
-            setReloadStatus('Page views saved · live submissions need deployed internal site', false);
+            setReloadStatus('GHL stats saved · live submissions need deployed internal site', false);
             return false;
           }
           if (response.status === 404) {
@@ -1162,17 +1185,17 @@
       }
     }
 
-    async function reloadData(viewsOverride) {
-      await fetchLiveData({ viewsOverride, closeModal: true });
+    async function reloadData(statsOverride) {
+      await fetchLiveData({ statsOverride, closeModal: true });
     }
 
     async function confirmUpdate() {
-      const views = readModalViews();
-      if (!views) {
-        setReloadStatus('Enter valid page view counts', true);
+      const stats = readModalStats();
+      if (!stats) {
+        setReloadStatus('Enter valid page views and opt-ins from GHL', true);
         return;
       }
-      await reloadData(views);
+      await reloadData(stats);
     }
 
     const toggle = document.getElementById('removeDupes');
