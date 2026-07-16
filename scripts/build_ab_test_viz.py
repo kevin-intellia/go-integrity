@@ -643,12 +643,12 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       </div>
       <div class="hero-metric">
         <div class="hero-value" id="rateControl">—</div>
-        <div class="hero-label">Opt-in rate</div>
+        <div class="hero-label">Actual lead rate</div>
       </div>
       <div class="stat-row">
         <div class="stat">
           <div class="stat-val" id="subsControl">—</div>
-          <div class="stat-lbl">Opt-ins</div>
+          <div class="stat-lbl">Actual leads</div>
         </div>
         <div class="stat">
           <div class="stat-val" id="viewsControl">—</div>
@@ -674,12 +674,12 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       </div>
       <div class="hero-metric">
         <div class="hero-value" id="rateVariation">—</div>
-        <div class="hero-label">Opt-in rate</div>
+        <div class="hero-label">Actual lead rate</div>
       </div>
       <div class="stat-row">
         <div class="stat">
           <div class="stat-val" id="subsVariation">—</div>
-          <div class="stat-lbl">Opt-ins</div>
+          <div class="stat-lbl">Actual leads</div>
         </div>
         <div class="stat">
           <div class="stat-val" id="viewsVariation">—</div>
@@ -691,14 +691,14 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
 
   <div class="battle-section">
     <div class="battle-head">
-      <h2>Battle over time</h2>
+      <h2>Conversion over time</h2>
       <div class="chart-tabs" role="tablist">
         <button type="button" class="chart-tab active" data-mode="rate" role="tab" aria-selected="true">Rate</button>
         <button type="button" class="chart-tab" data-mode="totals" role="tab" aria-selected="false">Totals</button>
       </div>
     </div>
     <div class="battle-chart-wrap">
-      <svg class="battle-chart" id="battleChart" viewBox="0 0 800 240" preserveAspectRatio="xMidYMid meet" aria-label="A/B battle chart"></svg>
+      <svg class="battle-chart" id="battleChart" viewBox="0 0 800 240" preserveAspectRatio="xMidYMid meet" aria-label="A/B conversion chart"></svg>
     </div>
     <div class="chart-legend">
       <span class="legend-item"><span class="legend-swatch control"></span> Short form</span>
@@ -725,23 +725,15 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
   <div class="modal-backdrop" id="updateModal" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="updateModalTitle">
       <h2 id="updateModalTitle">Update A/B data</h2>
-      <p>Paste <strong>Page Views</strong> and <strong>Opt-Ins</strong> from GHL split test → Stats (same numbers as the GHL table). Saved for the whole team. Submission rows reload from CRM.</p>
+      <p>Copy page views from GHL → Sites → Funnel → Page 1 split test → Stats. Saved for everyone on the team. Submissions reload from CRM.</p>
       <div class="modal-fields">
         <label>
           <strong>Short form · page views</strong>
           <input type="number" id="modalViewsControl" min="0" step="1" />
         </label>
         <label>
-          <strong>Short form · opt-ins</strong>
-          <input type="number" id="modalOptinsControl" min="0" step="1" />
-        </label>
-        <label>
           <strong>Long form · page views</strong>
           <input type="number" id="modalViewsVariation" min="0" step="1" />
-        </label>
-        <label>
-          <strong>Long form · opt-ins</strong>
-          <input type="number" id="modalOptinsVariation" min="0" step="1" />
         </label>
       </div>
       <div class="modal-actions">
@@ -785,21 +777,37 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       return date.toLocaleDateString('en-CA', {{ timeZone: 'America/New_York' }});
     }}
 
-    function dayRangeKeys() {{
-      const start = new Date(TEST_START_ISO);
+    function hourKeyEdt(date) {{
+      const day = dayKeyEdt(date);
+      const hour = Number(
+        date.toLocaleString('en-US', {{
+          timeZone: 'America/New_York',
+          hour: 'numeric',
+          hour12: false
+        }})
+      );
+      return `${{day}}T${{String(hour).padStart(2, '0')}}`;
+    }}
+
+    function parseHourKeyEdt(key) {{
+      const [day, hour] = key.split('T');
+      return new Date(`${{day}}T${{hour.padStart(2, '0')}}:00:00-04:00`);
+    }}
+
+    function hourRangeKeys() {{
+      const start = parseHourKeyEdt(hourKeyEdt(new Date(TEST_START_ISO)));
       const end = new Date();
+      const endKey = hourKeyEdt(end);
       const keys = [];
-      const seen = new Set();
-      for (let t = start.getTime(); t <= end.getTime() + 86400000; t += 86400000) {{
-        const key = dayKeyEdt(new Date(t));
-        if (!seen.has(key)) {{
-          seen.add(key);
-          keys.push(key);
-        }}
+      let cursor = start;
+      while (cursor.getTime() <= end.getTime()) {{
+        keys.push(hourKeyEdt(cursor));
+        cursor = new Date(cursor.getTime() + 3600000);
       }}
-      const today = dayKeyEdt(end);
-      if (!seen.has(today)) keys.push(today);
-      return keys.sort();
+      if (!keys.length || keys[keys.length - 1] !== endKey) {{
+        keys.push(endKey);
+      }}
+      return keys;
     }}
 
     function usableRows(rows) {{
@@ -808,47 +816,54 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       );
     }}
 
-    function cumulativeAllByDay(rows, dayKeys) {{
-      const sorted = rows
-        .filter((r) => !r.unknown && r.time)
-        .map((r) => ({{ t: parseSubmissionTime(r.time) }}))
+    function countActualLeads(rows) {{
+      return usableRows(rows).length;
+    }}
+
+    function cumulativeUniqueByHour(rows, hourKeys) {{
+      const sorted = usableRows(rows)
+        .map((r) => ({{ ...r, t: parseSubmissionTime(r.time) }}))
         .filter((r) => r.t && !Number.isNaN(r.t.getTime()))
         .sort((a, b) => a.t - b.t);
 
-      const perDay = {{}};
+      const firstHour = {{}};
+      const seen = new Set();
       for (const row of sorted) {{
-        const dk = dayKeyEdt(row.t);
-        perDay[dk] = (perDay[dk] || 0) + 1;
+        const email = String(row.email).trim().toLowerCase();
+        if (seen.has(email)) continue;
+        seen.add(email);
+        const hk = hourKeyEdt(row.t);
+        firstHour[hk] = (firstHour[hk] || 0) + 1;
       }}
 
       let cumulative = 0;
-      return dayKeys.map((dk) => {{
-        cumulative += perDay[dk] || 0;
+      return hourKeys.map((hk) => {{
+        cumulative += firstHour[hk] || 0;
         return cumulative;
       }});
     }}
 
-    function formatDayLabel(dayKey) {{
-      const d = new Date(`${{dayKey}}T12:00:00-04:00`);
-      return d.toLocaleDateString('en-US', {{
+    function formatHourLabel(hourKey) {{
+      const d = parseHourKeyEdt(hourKey);
+      return d.toLocaleString('en-US', {{
         timeZone: 'America/New_York',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+        hour: 'numeric'
       }});
     }}
 
     function renderBattleChart() {{
       const svg = document.getElementById('battleChart');
       const note = document.getElementById('chartNote');
-      const dayKeys = dayRangeKeys();
+      const hourKeys = hourRangeKeys();
       const views = getActiveViews();
-      const optins = getActiveOptins();
-      const controlTotals = cumulativeAllByDay(DATA.control_submissions, dayKeys);
-      const variationTotals = cumulativeAllByDay(DATA.variation_submissions, dayKeys);
+      const controlTotals = cumulativeUniqueByHour(DATA.control_submissions, hourKeys);
+      const variationTotals = cumulativeUniqueByHour(DATA.variation_submissions, hourKeys);
 
       let controlSeries = controlTotals;
       let variationSeries = variationTotals;
-      let yLabel = 'Opt-ins (cumulative)';
+      let yLabel = 'Actual leads';
       let yFormat = (v) => String(Math.round(v));
 
       if (chartMode === 'rate') {{
@@ -858,24 +873,23 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
         variationSeries = variationTotals.map((n) =>
           views.variation ? (n / views.variation) * 100 : 0
         );
-        yLabel = 'Opt-in rate';
+        yLabel = 'Actual lead rate';
         yFormat = (v) => `${{v.toFixed(2)}}%`;
         note.textContent =
-          `Headline rates use GHL opt-ins (${{optins.control}} / ${{optins.variation}}) ÷ page views. Chart tracks identified CRM submits over time.`;
+          'Hourly cumulative actual lead rate (same formula as the headline cards). Latest point matches the cards above.';
       }} else {{
-        note.textContent =
-          `Cumulative submits from CRM rows (target: ${{optins.control}} short / ${{optins.variation}} long per GHL).`;
+        note.textContent = 'Cumulative actual leads by hour since test start (Jul 15, 2026).';
       }}
 
       const width = 800;
       const height = 240;
-      const pad = {{ top: 18, right: 20, bottom: 36, left: 52 }};
+      const pad = {{ top: 18, right: 20, bottom: 44, left: 52 }};
       const innerW = width - pad.left - pad.right;
       const innerH = height - pad.top - pad.bottom;
-      const maxY = Math.max(1, ...controlSeries, ...variationSeries) * 1.12;
+      const maxY = Math.max(0.01, ...controlSeries, ...variationSeries) * 1.12;
 
       const xAt = (i) =>
-        pad.left + (dayKeys.length <= 1 ? innerW / 2 : (i / (dayKeys.length - 1)) * innerW);
+        pad.left + (hourKeys.length <= 1 ? innerW / 2 : (i / (hourKeys.length - 1)) * innerW);
       const yAt = (v) => pad.top + innerH - (v / maxY) * innerH;
 
       function pathFor(series) {{
@@ -895,11 +909,11 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       }}
 
       let xLabels = '';
-      const labelEvery = Math.max(1, Math.ceil(dayKeys.length / 6));
-      dayKeys.forEach((dk, i) => {{
-        if (i % labelEvery !== 0 && i !== dayKeys.length - 1) return;
+      const labelEvery = Math.max(1, Math.ceil(hourKeys.length / 8));
+      hourKeys.forEach((hk, i) => {{
+        if (i % labelEvery !== 0 && i !== hourKeys.length - 1) return;
         const x = xAt(i).toFixed(1);
-        xLabels += `<text x="${{x}}" y="${{height - 10}}" text-anchor="middle" fill="#9aa3b2" font-size="11">${{formatDayLabel(dk)}}</text>`;
+        xLabels += `<text x="${{x}}" y="${{height - 8}}" text-anchor="middle" fill="#9aa3b2" font-size="10">${{formatHourLabel(hk)}}</text>`;
       }});
 
       const hasData = controlTotals.some((n) => n > 0) || variationTotals.some((n) => n > 0);
@@ -985,20 +999,10 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       }};
     }}
 
-    function getActiveOptins() {{
-      return {{
-        control: Number(DATA.ghl?.optins?.control) || 0,
-        variation: Number(DATA.ghl?.optins?.variation) || 0
-      }};
-    }}
-
     function openUpdateModal() {{
       const views = getActiveViews();
-      const optins = getActiveOptins();
       document.getElementById('modalViewsControl').value = views.control;
       document.getElementById('modalViewsVariation').value = views.variation;
-      document.getElementById('modalOptinsControl').value = optins.control;
-      document.getElementById('modalOptinsVariation').value = optins.variation;
       const modal = document.getElementById('updateModal');
       modal.classList.add('open');
       modal.setAttribute('aria-hidden', 'false');
@@ -1011,20 +1015,13 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       modal.setAttribute('aria-hidden', 'true');
     }}
 
-    function readModalStats() {{
-      const views = {{
-        control: Number(document.getElementById('modalViewsControl').value),
-        variation: Number(document.getElementById('modalViewsVariation').value)
-      }};
-      const optins = {{
-        control: Number(document.getElementById('modalOptinsControl').value),
-        variation: Number(document.getElementById('modalOptinsVariation').value)
-      }};
-      const valid = [views.control, views.variation, optins.control, optins.variation].every(
-        (n) => Number.isFinite(n) && n >= 0
-      );
-      if (!valid) return null;
-      return {{ views, optins }};
+    function readModalViews() {{
+      const control = Number(document.getElementById('modalViewsControl').value);
+      const variation = Number(document.getElementById('modalViewsVariation').value);
+      if (!Number.isFinite(control) || !Number.isFinite(variation) || control < 0 || variation < 0) {{
+        return null;
+      }}
+      return {{ control, variation }};
     }}
 
     function fmtTime(iso) {{
@@ -1033,7 +1030,7 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
     }}
 
     function countUnique(rows) {{
-      return rows.filter(r => !r.duplicate).length;
+      return countActualLeads(rows);
     }}
 
     function calcRate(subs, views) {{
@@ -1068,15 +1065,16 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       const ctrlRows = DATA.control_submissions;
       const varRows = DATA.variation_submissions;
       const views = getActiveViews();
-      const optins = getActiveOptins();
 
-      const ctrlRate = calcRate(optins.control, views.control);
-      const varRate = calcRate(optins.variation, views.variation);
+      const ctrlUnique = countUnique(ctrlRows);
+      const varUnique = countUnique(varRows);
+      const ctrlRate = calcRate(ctrlUnique, views.control);
+      const varRate = calcRate(varUnique, views.variation);
 
       document.getElementById('rateControl').textContent = ctrlRate.toFixed(2) + '%';
       document.getElementById('rateVariation').textContent = varRate.toFixed(2) + '%';
-      document.getElementById('subsControl').textContent = optins.control.toLocaleString();
-      document.getElementById('subsVariation').textContent = optins.variation.toLocaleString();
+      document.getElementById('subsControl').textContent = ctrlUnique;
+      document.getElementById('subsVariation').textContent = varUnique;
       document.getElementById('viewsControl').textContent = views.control.toLocaleString();
       document.getElementById('viewsVariation').textContent = views.variation.toLocaleString();
 
@@ -1125,7 +1123,7 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       el.classList.toggle('error', Boolean(isError));
     }}
 
-    async function fetchLiveData({{ silent = false, statsOverride = null, closeModal = false }} = {{}}) {{
+    async function fetchLiveData({{ silent = false, viewsOverride = null, closeModal = false }} = {{}}) {{
       const btn = document.getElementById('reloadData');
       const confirmBtn = document.getElementById('confirmUpdate');
       if (!silent) {{
@@ -1135,12 +1133,12 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       }}
 
       try {{
-        const method = statsOverride ? 'POST' : 'GET';
+        const method = viewsOverride ? 'POST' : 'GET';
         const init = {{ cache: 'no-store' }};
-        if (statsOverride) {{
+        if (viewsOverride) {{
           init.method = 'POST';
           init.headers = {{ 'Content-Type': 'application/json' }};
-          init.body = JSON.stringify(statsOverride);
+          init.body = JSON.stringify({{ views: viewsOverride }});
         }}
 
         const response = await fetch('/api/ab-test-data', init);
@@ -1148,10 +1146,10 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
 
         if (!response.ok || !payload.ok) {{
           const detail = payload.error || `Request failed (${{response.status}})`;
-          if (response.status === 404 && statsOverride) {{
+          if (response.status === 404 && viewsOverride) {{
             if (closeModal) closeUpdateModal();
             render(document.getElementById('removeDupes').checked);
-            setReloadStatus('GHL stats saved · live submissions need deployed internal site', false);
+            setReloadStatus('Page views saved · live submissions need deployed internal site', false);
             return false;
           }}
           if (response.status === 404) {{
@@ -1181,17 +1179,17 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
       }}
     }}
 
-    async function reloadData(statsOverride) {{
-      await fetchLiveData({{ statsOverride, closeModal: true }});
+    async function reloadData(viewsOverride) {{
+      await fetchLiveData({{ viewsOverride, closeModal: true }});
     }}
 
     async function confirmUpdate() {{
-      const stats = readModalStats();
-      if (!stats) {{
-        setReloadStatus('Enter valid page views and opt-ins from GHL', true);
+      const views = readModalViews();
+      if (!views) {{
+        setReloadStatus('Enter valid page view counts', true);
         return;
       }}
-      await reloadData(stats);
+      await reloadData(views);
     }}
 
     const toggle = document.getElementById('removeDupes');

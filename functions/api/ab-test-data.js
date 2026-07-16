@@ -203,7 +203,7 @@ async function loadStaticJson(request, filename) {
 	}
 }
 
-async function loadSharedStats(env) {
+async function loadSharedViews(env) {
 	if (!env.AB_TEST_KV) {
 		return null;
 	}
@@ -218,20 +218,16 @@ async function loadSharedStats(env) {
 	}
 }
 
-async function saveSharedStats(env, stats) {
+async function saveSharedViews(env, views) {
 	if (!env.AB_TEST_KV) {
 		throw new Error(
-			'Shared stats storage is not configured. Add AB_TEST_KV KV binding on the internal Cloudflare project.'
+			'Shared page view storage is not configured. Add AB_TEST_KV KV binding on the internal Cloudflare project.'
 		);
 	}
 	const payload = {
 		views: {
-			control: Number(stats.views?.control) || 0,
-			variation: Number(stats.views?.variation) || 0
-		},
-		optins: {
-			control: Number(stats.optins?.control) || 0,
-			variation: Number(stats.optins?.variation) || 0
+			control: Number(views.control) || 0,
+			variation: Number(views.variation) || 0
 		},
 		updated_at: new Date().toISOString(),
 		source: 'GHL split test UI'
@@ -285,10 +281,9 @@ function mergeManualRows(apiRows, manualEntries, formName) {
 }
 
 async function buildGhlStats(env, request, controlRows, variationRows) {
-	const sharedStats = await loadSharedStats(env);
+	const sharedViews = await loadSharedViews(env);
 	const staticStats = (await loadStaticJson(request, 'ghl_split_stats_home_ab.json')) || {};
-	const viewsSource = sharedStats?.views ? sharedStats : staticStats;
-	const optinsSource = sharedStats?.optins ? sharedStats : staticStats;
+	const viewsSource = sharedViews?.views ? sharedViews : staticStats;
 
 	return {
 		views: {
@@ -296,11 +291,11 @@ async function buildGhlStats(env, request, controlRows, variationRows) {
 			variation: Number(viewsSource?.views?.variation) || 0
 		},
 		optins: {
-			control: Number(optinsSource?.optins?.control) || controlRows.length,
-			variation: Number(optinsSource?.optins?.variation) || variationRows.length
+			control: Number(staticStats?.optins?.control) || controlRows.length,
+			variation: Number(staticStats?.optins?.variation) || variationRows.length
 		},
-		updated_at: sharedStats?.updated_at || staticStats.updated_at || '',
-		stats_source: sharedStats?.views || sharedStats?.optins ? 'shared' : 'static',
+		updated_at: sharedViews?.updated_at || staticStats.updated_at || '',
+		views_source: sharedViews?.views ? 'shared' : 'static',
 		notes: staticStats.notes || ''
 	};
 }
@@ -370,35 +365,21 @@ export async function onRequestPost({ env, request }) {
 		return Response.json({ ok: false, error: 'Invalid JSON body' }, { status: 400 });
 	}
 
-	const controlViews = Number(body?.views?.control);
-	const variationViews = Number(body?.views?.variation);
-	const controlOptins = Number(body?.optins?.control);
-	const variationOptins = Number(body?.optins?.variation);
-	if (
-		!Number.isFinite(controlViews) ||
-		!Number.isFinite(variationViews) ||
-		!Number.isFinite(controlOptins) ||
-		!Number.isFinite(variationOptins) ||
-		controlViews < 0 ||
-		variationViews < 0 ||
-		controlOptins < 0 ||
-		variationOptins < 0
-	) {
-		return Response.json({ ok: false, error: 'Invalid GHL stats — enter views and opt-ins' }, { status: 400 });
+	const control = Number(body?.views?.control);
+	const variation = Number(body?.views?.variation);
+	if (!Number.isFinite(control) || !Number.isFinite(variation) || control < 0 || variation < 0) {
+		return Response.json({ ok: false, error: 'Invalid page view counts' }, { status: 400 });
 	}
 
 	try {
-		await saveSharedStats(env, {
-			views: { control: controlViews, variation: variationViews },
-			optins: { control: controlOptins, variation: variationOptins }
-		});
+		await saveSharedViews(env, { control, variation });
 		const payload = await buildAbTestPayload(env, request);
 		return Response.json(payload);
 	} catch (error) {
 		return Response.json(
 			{
 				ok: false,
-				error: error instanceof Error ? error.message : 'Failed to save GHL stats'
+				error: error instanceof Error ? error.message : 'Failed to save page views'
 			},
 			{ status: 500 }
 		);
