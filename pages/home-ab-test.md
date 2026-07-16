@@ -13,7 +13,7 @@ hide_toc: true
     <iframe
         src="/home-ab-test.html"
         title="Page 1 A/B Split Test"
-        style="display:block;width:100%;min-height:1050px;border:0;background:#0f1117;"
+        style="display:block;width:100%;min-height:1280px;border:0;background:#0f1117;"
         loading="lazy"
     ></iframe>
 </div>

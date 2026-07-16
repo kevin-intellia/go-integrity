@@ -380,13 +380,90 @@
       opacity: 0.55;
       cursor: not-allowed;
     }
+    .battle-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.15rem 1.1rem;
+      margin-bottom: 1.25rem;
+    }
+    .battle-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.85rem;
+    }
+    .battle-head h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .chart-tabs {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .chart-tab {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
+      cursor: pointer;
+    }
+    .chart-tab.active {
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+    .chart-tab[data-mode="rate"].active {
+      box-shadow: inset 0 -2px 0 var(--control);
+    }
+    .battle-chart-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+    .battle-chart {
+      width: 100%;
+      min-width: 520px;
+      height: auto;
+      display: block;
+    }
+    .chart-legend {
+      display: flex;
+      gap: 1.25rem;
+      margin-top: 0.65rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+    }
+    .legend-swatch.control { background: var(--control); }
+    .legend-swatch.variation { background: var(--variation); }
+    .chart-note {
+      margin: 0.55rem 0 0;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
 
   <div class="page-header">
     <h1>Page 1 A/B Split Test</h1>
-    <p class="sub">Started Jul 15, 2026 ~11:19 AM EDT · Updated 2026-07-15 23:41 UTC</p>
+    <p class="sub">Started Jul 15, 2026 ~11:19 AM EDT · Updated 2026-07-16 02:19 UTC</p>
   </div>
 
   <div class="ab-split">
@@ -449,6 +526,24 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="battle-section">
+    <div class="battle-head">
+      <h2>Battle over time</h2>
+      <div class="chart-tabs" role="tablist">
+        <button type="button" class="chart-tab active" data-mode="rate" role="tab" aria-selected="true">Rate</button>
+        <button type="button" class="chart-tab" data-mode="totals" role="tab" aria-selected="false">Totals</button>
+      </div>
+    </div>
+    <div class="battle-chart-wrap">
+      <svg class="battle-chart" id="battleChart" viewBox="0 0 800 240" preserveAspectRatio="xMidYMid meet" aria-label="A/B battle chart"></svg>
+    </div>
+    <div class="chart-legend">
+      <span class="legend-item"><span class="legend-swatch control"></span> Short form</span>
+      <span class="legend-item"><span class="legend-swatch variation"></span> Long form</span>
+    </div>
+    <p class="chart-note" id="chartNote"></p>
   </div>
 
   <div class="toolbar">
@@ -677,6 +772,169 @@
   }
 };
     const SUBMISSIONS_STORAGE_KEY = 'home_ab_submissions';
+    const TEST_START_ISO = '2026-07-15T15:19:56Z';
+    let chartMode = 'rate';
+
+    function parseSubmissionTime(raw) {
+      if (!raw) return null;
+      const s = String(raw);
+      if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(s)) return new Date(s);
+      return new Date(`${s}-04:00`);
+    }
+
+    function dayKeyEdt(date) {
+      return date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    }
+
+    function dayRangeKeys() {
+      const start = new Date(TEST_START_ISO);
+      const end = new Date();
+      const keys = [];
+      const seen = new Set();
+      for (let t = start.getTime(); t <= end.getTime() + 86400000; t += 86400000) {
+        const key = dayKeyEdt(new Date(t));
+        if (!seen.has(key)) {
+          seen.add(key);
+          keys.push(key);
+        }
+      }
+      const today = dayKeyEdt(end);
+      if (!seen.has(today)) keys.push(today);
+      return keys.sort();
+    }
+
+    function usableRows(rows) {
+      return rows.filter(
+        (r) => !r.duplicate && !r.unknown && r.time && r.email && r.email !== '—'
+      );
+    }
+
+    function cumulativeUniqueByDay(rows, dayKeys) {
+      const sorted = usableRows(rows)
+        .map((r) => ({ ...r, t: parseSubmissionTime(r.time) }))
+        .filter((r) => r.t && !Number.isNaN(r.t.getTime()))
+        .sort((a, b) => a.t - b.t);
+
+      const firstDay = {};
+      const seen = new Set();
+      for (const row of sorted) {
+        const email = String(row.email).trim().toLowerCase();
+        if (seen.has(email)) continue;
+        seen.add(email);
+        const dk = dayKeyEdt(row.t);
+        firstDay[dk] = (firstDay[dk] || 0) + 1;
+      }
+
+      let cumulative = 0;
+      return dayKeys.map((dk) => {
+        cumulative += firstDay[dk] || 0;
+        return cumulative;
+      });
+    }
+
+    function formatDayLabel(dayKey) {
+      const d = new Date(`${dayKey}T12:00:00-04:00`);
+      return d.toLocaleDateString('en-US', {
+        timeZone: 'America/New_York',
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+
+    function renderBattleChart() {
+      const svg = document.getElementById('battleChart');
+      const note = document.getElementById('chartNote');
+      const dayKeys = dayRangeKeys();
+      const views = getActiveViews();
+      const controlTotals = cumulativeUniqueByDay(DATA.control_submissions, dayKeys);
+      const variationTotals = cumulativeUniqueByDay(DATA.variation_submissions, dayKeys);
+
+      let controlSeries = controlTotals;
+      let variationSeries = variationTotals;
+      let yLabel = 'Unique submissions';
+      let yFormat = (v) => String(Math.round(v));
+
+      if (chartMode === 'rate') {
+        controlSeries = controlTotals.map((n) =>
+          views.control ? (n / views.control) * 100 : 0
+        );
+        variationSeries = variationTotals.map((n) =>
+          views.variation ? (n / views.variation) * 100 : 0
+        );
+        yLabel = 'Unique submission rate';
+        yFormat = (v) => `${v.toFixed(2)}%`;
+        note.textContent =
+          'Rate = cumulative unique submissions ÷ current GHL page views (same denominator for each day).';
+      } else {
+        note.textContent = 'Cumulative unique submissions since test start (Jul 15, 2026).';
+      }
+
+      const width = 800;
+      const height = 240;
+      const pad = { top: 18, right: 20, bottom: 36, left: 52 };
+      const innerW = width - pad.left - pad.right;
+      const innerH = height - pad.top - pad.bottom;
+      const maxY = Math.max(1, ...controlSeries, ...variationSeries) * 1.12;
+
+      const xAt = (i) =>
+        pad.left + (dayKeys.length <= 1 ? innerW / 2 : (i / (dayKeys.length - 1)) * innerW);
+      const yAt = (v) => pad.top + innerH - (v / maxY) * innerH;
+
+      function pathFor(series) {
+        if (!series.length) return '';
+        return series
+          .map((v, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`)
+          .join(' ');
+      }
+
+      const yTicks = 4;
+      let grid = '';
+      for (let i = 0; i <= yTicks; i++) {
+        const v = (maxY * i) / yTicks;
+        const y = yAt(v).toFixed(1);
+        grid += `<line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}" stroke="rgba(255,255,255,0.08)" />`;
+        grid += `<text x="${pad.left - 8}" y="${y}" text-anchor="end" dominant-baseline="middle" fill="#9aa3b2" font-size="11">${yFormat(v)}</text>`;
+      }
+
+      let xLabels = '';
+      const labelEvery = Math.max(1, Math.ceil(dayKeys.length / 6));
+      dayKeys.forEach((dk, i) => {
+        if (i % labelEvery !== 0 && i !== dayKeys.length - 1) return;
+        const x = xAt(i).toFixed(1);
+        xLabels += `<text x="${x}" y="${height - 10}" text-anchor="middle" fill="#9aa3b2" font-size="11">${formatDayLabel(dk)}</text>`;
+      });
+
+      const hasData = controlTotals.some((n) => n > 0) || variationTotals.some((n) => n > 0);
+      if (!hasData) {
+        svg.innerHTML = `<text x="${width / 2}" y="${height / 2}" text-anchor="middle" fill="#9aa3b2" font-size="13">No submission data yet</text>`;
+        note.textContent = '';
+        return;
+      }
+
+      svg.innerHTML = `
+        ${grid}
+        <text x="${pad.left}" y="12" fill="#9aa3b2" font-size="11">${yLabel}</text>
+        <path d="${pathFor(controlSeries)}" fill="none" stroke="#5b8def" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+        <path d="${pathFor(variationSeries)}" fill="none" stroke="#4ec9b0" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+        ${controlSeries.map((v, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3.5" fill="#5b8def" />`).join('')}
+        ${variationSeries.map((v, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3.5" fill="#4ec9b0" />`).join('')}
+        ${xLabels}
+      `;
+    }
+
+    function bindChartTabs() {
+      document.querySelectorAll('.chart-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          chartMode = btn.dataset.mode || 'rate';
+          document.querySelectorAll('.chart-tab').forEach((tab) => {
+            const active = tab === btn;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', active ? 'true' : 'false');
+          });
+          renderBattleChart();
+        });
+      });
+    }
 
     function loadCachedSubmissions() {
       try {
@@ -831,6 +1089,7 @@
         `Control — form submissions (${ctrlVisible})`;
       document.querySelector('.table-card.variation h2').textContent =
         `Variation — form submissions (${varVisible})`;
+      renderBattleChart();
     }
 
     function formatUpdatedAt(value) {
@@ -933,6 +1192,7 @@
       if (event.key === 'Escape') closeUpdateModal();
     });
 
+    bindChartTabs();
     const hadCachedSubmissions = loadCachedSubmissions();
     render(true);
     if (hadCachedSubmissions) {
