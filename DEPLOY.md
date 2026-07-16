@@ -66,18 +66,20 @@ Use **Encrypt** (Secret) for each. After saving, **Retry deployment**.
 
 ## 5. Internal A/B page views (KV)
 
-The Page 1 A/B dashboard stores **shared GHL stats** (page views + opt-ins) in Cloudflare KV so one update applies for the whole team.
+The Page 1 A/B dashboard stores **shared page views** in Cloudflare KV so one **Update data** paste applies for the whole team. (Opt-in targets for table padding come from `config/ghl_split_stats_home_ab.json` at deploy time.)
 
-On the **internal** project only:
+On the **internal** project only (`go-integrity-internal`):
 
-1. **Workers & Pages → KV → Create a namespace** (e.g. `go-integrity-ab-test`)
-2. **Internal Pages project → Settings → Functions → KV namespace bindings**
-3. Add binding:
-   - **Variable name:** `AB_TEST_KV`
-   - **KV namespace:** the namespace you created
-4. **Retry deployment**
+1. Open [Cloudflare dashboard](https://dash.cloudflare.com) → **Storage & databases** → **KV**
+2. **Create a namespace** — name it e.g. `go-integrity-ab-test`
+3. Go to **Workers & Pages** → open **`go-integrity-internal`** (not the client project)
+4. **Settings** → **Bindings** → **Add** → **KV namespace**
+5. Set:
+   - **Variable name:** `AB_TEST_KV` (must match exactly)
+   - **KV namespace:** `go-integrity-ab-test`
+6. **Save**, then **Deployments → … → Retry deployment** on the latest build
 
-Until KV is bound, stats fall back to the static JSON from deploy. Saving via **Update data** requires the KV binding — paste all four numbers from GHL (views + opt-ins for each arm).
+Until KV is bound, **Update data** still reloads CRM submissions and applies page views for your browser session only. After KV is bound, saved views persist for everyone.
 
 ## 6. Optional: Refresh button
 

@@ -1163,7 +1163,11 @@ def build_html(data: dict, *, embedded: bool = False) -> str:
         applyPayload(payload);
         if (closeModal) closeUpdateModal();
         render(document.getElementById('removeDupes').checked);
-        setReloadStatus('Updated ' + formatUpdatedAt(payload.updated_at), false);
+        if (payload.warning) {{
+          setReloadStatus(payload.warning, false);
+        }} else {{
+          setReloadStatus('Updated ' + formatUpdatedAt(payload.updated_at), false);
+        }}
         return true;
       }} catch (error) {{
         if (!silent) {{

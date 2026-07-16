@@ -1324,7 +1324,7 @@
     }
 
     function countUnique(rows) {
-      return rows.filter(r => !r.duplicate).length;
+      return countActualLeads(rows);
     }
 
     function calcRate(subs, views) {
@@ -1457,7 +1457,11 @@
         applyPayload(payload);
         if (closeModal) closeUpdateModal();
         render(document.getElementById('removeDupes').checked);
-        setReloadStatus('Updated ' + formatUpdatedAt(payload.updated_at), false);
+        if (payload.warning) {
+          setReloadStatus(payload.warning, false);
+        } else {
+          setReloadStatus('Updated ' + formatUpdatedAt(payload.updated_at), false);
+        }
         return true;
       } catch (error) {
         if (!silent) {

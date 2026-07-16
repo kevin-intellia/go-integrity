@@ -219,11 +219,6 @@ async function loadSharedViews(env) {
 }
 
 async function saveSharedViews(env, views) {
-	if (!env.AB_TEST_KV) {
-		throw new Error(
-			'Shared page view storage is not configured. Add AB_TEST_KV KV binding on the internal Cloudflare project.'
-		);
-	}
 	const payload = {
 		views: {
 			control: Number(views.control) || 0,
@@ -232,6 +227,11 @@ async function saveSharedViews(env, views) {
 		updated_at: new Date().toISOString(),
 		source: 'GHL split test UI'
 	};
+
+	if (!env.AB_TEST_KV) {
+		return { ...payload, ephemeral: true };
+	}
+
 	await env.AB_TEST_KV.put(KV_VIEWS_KEY, JSON.stringify(payload));
 	return payload;
 }
@@ -372,8 +372,18 @@ export async function onRequestPost({ env, request }) {
 	}
 
 	try {
-		await saveSharedViews(env, { control, variation });
+		const saved = await saveSharedViews(env, { control, variation });
 		const payload = await buildAbTestPayload(env, request);
+		if (saved.ephemeral) {
+			payload.ghl = {
+				...payload.ghl,
+				views: saved.views,
+				updated_at: saved.updated_at,
+				views_source: 'session'
+			};
+			payload.warning =
+				'Page views updated for you only — add AB_TEST_KV on the internal Cloudflare project to share across the team.';
+		}
 		return Response.json(payload);
 	} catch (error) {
 		return Response.json(
