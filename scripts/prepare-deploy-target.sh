@@ -7,7 +7,7 @@ REDIRECTS="static/_redirects"
 
 case "$TARGET" in
 	client)
-		for page in meta-ads.md home-ab-test.md; do
+		for page in index.md facebook.md meta-ads.md home-ab-test.md; do
 			if [ -f "pages/$page" ]; then
 				rm -f "pages/$page"
 				echo "Excluded internal page: pages/$page"
