@@ -2,7 +2,24 @@
 set -euo pipefail
 
 # client = client report only; internal = All + Facebook + A/B (no Campaign Analytics)
-DEPLOY_TARGET="${CLOUDFLARE_DEPLOY_TARGET:-${1:-client}}"
+resolve_deploy_target() {
+	if [ -n "${CLOUDFLARE_DEPLOY_TARGET:-}" ]; then
+		echo "$CLOUDFLARE_DEPLOY_TARGET"
+		return
+	fi
+	if [ -n "${1:-}" ]; then
+		echo "$1"
+		return
+	fi
+	if [[ "${CF_PAGES_PROJECT_NAME:-}" == *internal* ]]; then
+		echo internal
+		return
+	fi
+	echo client
+}
+
+DEPLOY_TARGET="$(resolve_deploy_target "${1:-}")"
+echo "Cloudflare deploy target: $DEPLOY_TARGET (project: ${CF_PAGES_PROJECT_NAME:-local})"
 
 if [ -z "${GHL_PRIVATE_INTEGRATION_TOKEN:-}" ]; then
 	echo "ERROR: GHL_PRIVATE_INTEGRATION_TOKEN is not set."

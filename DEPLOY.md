@@ -10,7 +10,7 @@ Two separate Cloudflare Pages projects share this repo. Each build publishes **o
 Client URL example: `https://go-integrity.pages.dev` → `/client-report/` only  
 Internal URL example: `https://go-integrity-internal.pages.dev` → `/` (All), `/facebook/`, `/home-ab-test/`
 
-**Important:** Do not use `npm run build:cloudflare` on Cloudflare — it defaults to the **client** target. Set the full command per project (`build:cloudflare:client` or `build:cloudflare:internal`).
+**Important:** Both projects can use `npm run build:cloudflare` — the script auto-selects **internal** when `CF_PAGES_PROJECT_NAME` contains `internal` (e.g. `go-integrity-internal`), otherwise **client**. You can still set `npm run build:cloudflare:client` or `:internal` explicitly.
 
 ## 1. Push to GitHub
 

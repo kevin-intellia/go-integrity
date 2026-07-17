@@ -15,7 +15,7 @@
     "report:split-test": ".venv/bin/python scripts/split_test_report.py",
     "report:ab-viz": ".venv/bin/python scripts/build_ab_test_viz.py",
     "refresh": "npm run sync:meta && npm run sync:ghl && npm run report:ab-viz && npm run sources",
-    "build:cloudflare": "bash scripts/build-cloudflare.sh client",
+    "build:cloudflare": "bash scripts/build-cloudflare.sh",
     "build:cloudflare:client": "bash scripts/build-cloudflare.sh client",
     "build:cloudflare:internal": "bash scripts/build-cloudflare.sh internal"
   },
