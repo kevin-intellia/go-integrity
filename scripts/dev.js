@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DEV_OPEN_PATH = '/';
+const DEV_OPEN_PATH = process.env.DEV_OPEN_PATH || process.argv[2] || '/';
 
 import './patch-vite-config.js';
 
@@ -30,7 +30,19 @@ function cleanDevArtifacts() {
 	}
 }
 
+function ensureEvidenceData() {
+	const parquet = path.join(
+		root,
+		'.evidence/template/static/data/ghl/_lead_records/_lead_records.parquet'
+	);
+	if (!fs.existsSync(parquet)) {
+		console.log('Evidence data missing — running npm run sources...');
+		spawnSync('npm', ['run', 'sources'], { cwd: root, stdio: 'inherit' });
+	}
+}
+
 function prepareDevAssets() {
+	ensureEvidenceData();
 	spawnSync('.venv/bin/python', ['scripts/build_ab_test_viz.py'], {
 		cwd: root,
 		stdio: 'inherit'

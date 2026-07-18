@@ -5,6 +5,7 @@
     "build": "evidence build",
     "build:strict": "evidence build:strict",
     "dev": "node scripts/dev.js",
+    "dev:client": "DEV_OPEN_PATH=/client-report/ node scripts/dev.js",
     "dev:once": "node scripts/dev-once.js",
     "test": "evidence build",
     "sources": "evidence sources && bash scripts/sync-static-data.sh",

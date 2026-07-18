@@ -189,6 +189,8 @@ order by channel, lead_date
 
 ## Leads by channel
 
+Marketing and referral sources — not individual forms.
+
 ```sql lead_channels
 select
     channel,
@@ -204,6 +206,28 @@ order by leads desc
     data={lead_channels}
     title="Leads by channel"
     x=channel
+    y=leads
+    swapXY=true
+/>
+
+## Leads by form
+
+```sql lead_forms
+select
+    lead_form,
+    count(*) as leads
+from ghl._lead_records
+where lead_date >= '${inputs.date_range.start}'
+  and lead_date <= '${inputs.date_range.end}'
+  and lead_form is not null
+group by 1
+order by case lead_form when 'Website' then 1 when 'Funnel' then 2 else 3 end
+```
+
+<BarChart
+    data={lead_forms}
+    title="Leads by form"
+    x=lead_form
     y=leads
     swapXY=true
 />

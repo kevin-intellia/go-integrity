@@ -39,7 +39,7 @@ where lead_date >= '${inputs.date_range.start}'
 
 ## Lead Sources
 
-All campaigns and channels driving leads into the CRM.
+Marketing and referral sources — not individual forms.
 
 ```sql lead_channels
 select
@@ -183,15 +183,52 @@ cross join crm c
 
 <FunnelMetricBlocks data={funnel_totals} showShowingsRequested={false} />
 
-```sql lead_cumulative
-with daily as (
+```sql lead_forms
+select
+    lead_form,
+    count(*) as leads
+from ghl._lead_records
+where lead_date >= '${inputs.date_range.start}'
+  and lead_date <= '${inputs.date_range.end}'
+  and channel = 'Facebook'
+  and lead_form is not null
+group by 1
+order by case lead_form when 'Website' then 1 when 'Funnel' then 2 else 3 end
+```
+
+<BarChart
+    data={lead_forms}
+    title="Leads by form"
+    x=lead_form
+    y=leads
+    swapXY=true
+/>
+
+```sql facebook_leads_cumulative
+with classified as (
+    select lead_date, lead_form
+    from ghl._lead_records
+    where channel = 'Facebook'
+      and lead_form is not null
+      and lead_date >= '${inputs.date_range.start}'
+      and lead_date <= '${inputs.date_range.end}'
+),
+forms as (
+    select distinct lead_form from classified
+),
+daily as (
+    select
+        lead_date,
+        lead_form,
+        count(*) as daily_leads
+    from classified
+    group by 1, 2
+),
+daily_total as (
     select
         lead_date,
         count(*) as daily_leads
-    from ghl._lead_records
-    where channel = 'Facebook'
-      and lead_date >= '${inputs.date_range.start}'
-      and lead_date <= '${inputs.date_range.end}'
+    from classified
     group by 1
 ),
 date_span as (
@@ -203,29 +240,66 @@ date_span as (
         )
     )::date as lead_date
 ),
-filled as (
+form_dates as (
     select
         d.lead_date,
-        coalesce(daily.daily_leads, 0) as daily_leads
+        f.lead_form
     from date_span d
-    left join daily on d.lead_date = daily.lead_date
+    cross join forms f
+),
+filled as (
+    select
+        fd.lead_date,
+        fd.lead_form,
+        coalesce(daily.daily_leads, 0) as daily_leads
+    from form_dates fd
+    left join daily
+        on fd.lead_date = daily.lead_date
+        and fd.lead_form = daily.lead_form
+),
+all_filled as (
+    select
+        d.lead_date,
+        coalesce(daily_total.daily_leads, 0) as daily_leads
+    from date_span d
+    left join daily_total on d.lead_date = daily_total.lead_date
+),
+per_form as (
+    select
+        lead_date,
+        lead_form as series,
+        strftime(lead_date, '%b %d') as lead_date_label,
+        sum(daily_leads) over (
+            partition by lead_form
+            order by lead_date
+            rows between unbounded preceding and current row
+        ) as cumulative_leads
+    from filled
+),
+all_series as (
+    select
+        lead_date,
+        'All' as series,
+        strftime(lead_date, '%b %d') as lead_date_label,
+        sum(daily_leads) over (
+            order by lead_date
+            rows between unbounded preceding and current row
+        ) as cumulative_leads
+    from all_filled
 )
-select
-    lead_date,
-    strftime(lead_date, '%b %d') as lead_date_label,
-    sum(daily_leads) over (
-        order by lead_date
-        rows between unbounded preceding and current row
-    ) as cumulative_leads
-from filled
-order by lead_date
+select * from per_form
+union all
+select * from all_series
+order by series, lead_date
 ```
 
 <LineChart
-    data={lead_cumulative}
+    data={facebook_leads_cumulative}
     title="Cumulative Facebook ad leads"
     x=lead_date_label
     y=cumulative_leads
+    series=series
+    seriesOrder={['All', 'Funnel', 'Website']}
     sort=false
     yFmt='#,##0'
 />

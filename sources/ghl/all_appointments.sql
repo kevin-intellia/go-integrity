@@ -15,25 +15,7 @@ select
     c.email,
     c.phone,
     cast(coalesce(c.date_added, o.created_at) as date) as lead_date,
-    case
-        when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 'Facebook'
-        when c.utm_medium = 'email' or c.utm_source ilike '%email%' then 'Email'
-        when c.utm_medium = 'print' then 'Print'
-        when o.source in ('Integrity Website Inquires', 'Integrity Website Inquiries') then 'Integrity Website'
-        when o.source = 'Listing Realtor Referral Leads' then 'Realtor Referral'
-        when o.source in ('Realtors', 'Realors') then 'Realtors'
-        when o.source = 'FB Community/Marketplace Ad' then 'Facebook Marketplace'
-        when c.utm_source is null or trim(c.utm_source) = '' then
-            case
-                when c.session_source = 'Direct traffic' then 'No Campaign Tag'
-                when c.session_source = 'Social media' then 'Social'
-                when c.session_source = 'Organic Search' then 'Organic Search'
-                when o.source is not null and trim(o.source) != '' then o.source
-                when c.source is not null and trim(c.source) != '' then c.source
-                else 'Untracked (no UTM)'
-            end
-        else coalesce(c.utm_source, 'Other')
-    end as channel,
+    lr.channel,
     case c.utm_term
         when '120250101870600306' then 'VT & NH'
         when '120250101883590306' then 'VT & NH'
@@ -91,6 +73,7 @@ select
     o.utm_keyword as opp_utm_keyword
 from ghl.opportunities o
 join ghl.contacts c on c.id = o.contact_id
+join lead_records lr on lr.opportunity_id = o.id
 where o.pipeline_stage_id = 'e76ef02c-d363-4233-a669-9d6a9468990c'
 order by
     case when c.source ilike '%Private Showing%' then 0 else 1 end,

@@ -292,45 +292,7 @@ def write_table(table: str, ddl: str, rows: list[dict], columns: list[str]) -> i
     return len(rows)
 
 
-LEAD_RECORDS_VIEW = """
-create or replace view lead_records as
-select
-    o.id as opportunity_id,
-    o.contact_id,
-    cast(coalesce(c.date_added, o.created_at) as date) as lead_date,
-    o.source as opportunity_source,
-    c.source as contact_source,
-    c.utm_source,
-    c.utm_medium,
-    c.session_source,
-    case
-        when c.utm_source = 'facebook' and c.utm_medium = 'cpc' then 'Facebook'
-        when c.utm_medium = 'email' or c.utm_source ilike '%email%' then 'Email'
-        when c.utm_medium = 'print' then 'Print'
-        when o.source in ('Integrity Website Inquires', 'Integrity Website Inquiries') then 'Integrity Website'
-        when o.source = 'Listing Realtor Referral Leads' then 'Realtor Referral'
-        when o.source in ('Realtors', 'Realors') then 'Realtors'
-        when o.source = 'FB Community/Marketplace Ad' then 'Facebook Marketplace'
-        when c.utm_source is null or trim(c.utm_source) = '' then
-            case
-                when c.session_source = 'Direct traffic' then 'No Campaign Tag'
-                when c.session_source = 'Social media' then 'Social'
-                when c.session_source = 'Organic Search' then 'Organic Search'
-                when o.source is not null and trim(o.source) != '' then o.source
-                when c.source is not null and trim(c.source) != '' then c.source
-                else 'Untracked (no UTM)'
-            end
-        else coalesce(c.utm_source, 'Other')
-    end as channel
-from opportunities o
-join contacts c on c.id = o.contact_id
-where not (
-    lower(coalesce(c.email, '')) in ('test@test.com', 'test@gmail.com')
-    or lower(coalesce(c.email, '')) like '%intelliadigital.com'
-    or lower(trim(coalesce(c.first_name, ''))) in ('test', 'test 1')
-    or lower(trim(coalesce(c.last_name, ''))) = 'test'
-)
-"""
+LEAD_RECORDS_VIEW = (Path(__file__).parent / "ghl_lead_records_view.sql").read_text()
 
 
 def ensure_lead_records_view() -> None:
